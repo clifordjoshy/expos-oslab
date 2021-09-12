@@ -1,0 +1,25 @@
+int main()
+{
+	decl
+		int temp, fileDescriptor, fileRet;
+		str fileName, readv;
+	enddecl
+	begin
+		temp = exposcall("Write", -2, "Enter name");
+		temp = exposcall("Read", -1, fileName);
+
+		fileDescriptor = exposcall("Open", fileName);
+
+		if(fileDescriptor >= 0) then
+			fileRet = exposcall("Read", fileDescriptor, readv);
+			while(fileRet != -2) do
+				temp = exposcall("Write", -2, readv);
+				fileRet = exposcall("Read", fileDescriptor, readv);
+			endwhile;
+		else
+			temp = exposcall("Write", -2, "Invalid file!");
+		endif;
+
+		return 0;
+	end
+}

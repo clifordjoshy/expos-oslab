@@ -1,0 +1,31 @@
+load --os /home/expos/myexpos/workdir/common/boot.xsm
+load --idle /home/expos/myexpos/workdir/common/program_idle.xsm
+load --init /home/expos/myexpos/workdir/common/program_login.xsm
+load --shell /home/expos/myexpos/workdir/common/program_shell.xsm
+load --library /home/expos/myexpos/expl/library.lib
+load --exhandler /home/expos/myexpos/workdir/common/handler_exception.xsm
+load --int=timer /home/expos/myexpos/workdir/common/handler_timer.xsm
+load --int=console /home/expos/myexpos/workdir/common/handler_console.xsm
+load --int=disk /home/expos/myexpos/workdir/common/handler_disk.xsm
+load --int=4 /home/expos/myexpos/workdir/common/handler_4.xsm
+load --int=5 /home/expos/myexpos/workdir/common/handler_5.xsm
+load --int=6 /home/expos/myexpos/workdir/common/handler_6.xsm
+load --int=7 /home/expos/myexpos/workdir/common/handler_7.xsm
+load --int=8 /home/expos/myexpos/workdir/common/handler_8.xsm
+load --int=9 /home/expos/myexpos/workdir/common/handler_9.xsm
+load --int=10 /home/expos/myexpos/workdir/common/handler_10.xsm
+load --int=11 /home/expos/myexpos/workdir/common/handler_11.xsm
+load --int=12 /home/expos/myexpos/workdir/common/handler_12.xsm
+load --int=13 /home/expos/myexpos/workdir/common/handler_13.xsm
+load --int=14 /home/expos/myexpos/workdir/common/handler_14.xsm
+load --int=15 /home/expos/myexpos/workdir/common/handler_15.xsm
+load --int=16 /home/expos/myexpos/workdir/common/handler_16.xsm
+load --int=17 /home/expos/myexpos/workdir/common/handler_17.xsm
+load --module 0 /home/expos/myexpos/workdir/common/module_resourcemgr.xsm
+load --module 1 /home/expos/myexpos/workdir/common/module_processmgr.xsm
+load --module 2 /home/expos/myexpos/workdir/common/module_memorymgr.xsm
+load --module 3 /home/expos/myexpos/workdir/common/module_filemgr.xsm
+load --module 4 /home/expos/myexpos/workdir/common/module_devicemgr.xsm
+load --module 5 /home/expos/myexpos/workdir/common/module_contextswitch.xsm
+load --module 6 /home/expos/myexpos/workdir/common/module_pager.xsm
+load --module 7 /home/expos/myexpos/workdir/common/module_boot.xsm

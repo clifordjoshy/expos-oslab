@@ -1,0 +1,23 @@
+int main()
+{
+	decl
+		int temp, fileDescriptor, fileRet;
+		int readv;
+	enddecl
+	begin
+
+		fileDescriptor = exposcall("Open", "root");
+
+		fileRet = exposcall("Read", fileDescriptor, readv);
+		while(fileRet != -2) do
+		 	if(readv != -1) then
+				temp = exposcall("Write", -2, readv);
+			endif;
+			temp = exposcall("Seek", fileDescriptor, 7);		//offset to the next file name
+			fileRet = exposcall("Read", fileDescriptor, readv);
+		endwhile;
+		
+
+		return 0;
+	end
+}

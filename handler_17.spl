@@ -1,0 +1,64 @@
+//login
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = INT_LOGIN;		//MODE flag
+
+alias userSP R0;
+userSP = SP;
+
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+
+// kernel stack
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+
+alias returnValue R11;
+
+if([SYSTEM_STATUS_TABLE + 1] != LOGIN_PROCESS) then
+	returnValue = -2;
+	goto return_to_user;
+endif;
+
+alias username R1;
+username = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+alias password R2;
+password = [([PTBR + 2 * ((userSP-3)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-3) % PAGE_SIZE)];
+
+alias userId R3;
+userId = 0;
+while(userId < MAX_USER_NUM) do
+	if([USER_TABLE + 2*userId] == username) then
+		break;
+	endif;
+	userId = userId + 1;
+endwhile;
+
+if(userId == MAX_USER_NUM) then
+	returnValue = -1;
+	goto return_to_user;
+endif;
+
+encrypt password;
+
+if(password != [USER_TABLE + 2*userId + 1]) then
+	returnValue = -1;
+	goto return_to_user;
+endif;
+
+//set process table values for shell process
+[PROCESS_TABLE + 16*SHELL_PROCESS + 3] = userId;
+[PROCESS_TABLE + 16*SHELL_PROCESS + 4] = CREATED;
+
+//set state of login process to waiting
+[PROCESS_TABLE + 16*LOGIN_PROCESS + 4] = WAIT_PROCESS;
+[PROCESS_TABLE + 16*LOGIN_PROCESS + 5] = SHELL_PROCESS;
+
+[SYSTEM_STATUS_TABLE] = userId;
+
+multipush(R0, R1, R2);
+call CONTEXT_SWITCH;
+multipop(R0, R1, R2);
+
+return_to_user:
+[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;			//reset mode flag
+SP = userSP;
+ireturn;

@@ -1,0 +1,243 @@
+// module 6
+//(optimised to fit into 2 blocks)
+alias functionNum R1;
+alias currentPID R2;
+
+if(functionNum == SWAP_OUT) then
+	alias swapProc R3;
+	swapProc = -1;
+	alias maxTickProc R4;
+	maxTickProc = -1;
+	alias maxTickVal R5;
+	maxTickVal = -1;
+
+	alias processTableEntry R6;
+	alias procId R7;
+	procId = SHELL_PROCESS + 1;
+
+	while(procId < SWAPPER_DAEMON) do
+		processTableEntry = PROCESS_TABLE + 16*procId;
+		
+		//if process is not already swapped out
+		if([processTableEntry + 6] != 1) then
+
+			//if process is in wait_process state
+			if([processTableEntry + 4] == WAIT_PROCESS) then
+				swapProc = procId;
+				break;
+			endif;
+
+			//wait semaphore if no wait process state is available
+			if(swapProc == -1 && [processTableEntry+4] == WAIT_SEMAPHORE && [processTableEntry+6] != 1) then
+				swapProc = procId;
+			endif;
+
+			//get process with max tick if above two are not available
+			if(
+				swapProc == -1 &&
+				[processTableEntry + 4] != RUNNING &&
+				[processTableEntry + 4] != TERMINATED &&
+				[processTableEntry + 4] != ALLOCATED &&
+				[processTableEntry + 6] != 1 &&
+				[processTableEntry + 0] > maxTickVal
+			) then
+				maxTickProc = procId;
+				maxTickVal = [processTableEntry + 0];
+			endif;
+
+		endif;
+
+		procId = procId + 1;
+	endwhile;
+
+	//no processes are available
+	if(swapProc == -1 && maxTickProc == -1) then
+		[SYSTEM_STATUS_TABLE + 5] = 0;
+		return;
+	endif;
+
+	if(swapProc == -1) then
+		swapProc = maxTickProc;
+	endif;
+
+	[PROCESS_TABLE + 16*swapProc] = 0;		//set tick to 0
+
+	multipush(R1, R2, R3);	
+	alias pageTableEntry R4;
+	pageTableEntry = PAGE_TABLE_BASE + 20*swapProc;
+	alias diskMapTableEntry R5;
+	diskMapTableEntry = DISK_MAP_TABLE + 10*swapProc;
+
+	//release code pages
+	alias pageNum R6;
+	pageNum = 4;		//code page
+	while(pageNum <= 7) do
+		if([pageTableEntry + 2*pageNum] != -1) then
+			multipush(R4, R5, R6);
+			R1 = RELEASE_PAGE;
+			R2 = [pageTableEntry + 2*pageNum];
+			call MEMORY_MANAGER;
+			multipop(R4, R5, R6);
+
+			[pageTableEntry + 2*pageNum] = -1;
+			[pageTableEntry + 2*pageNum + 1] = "0000";
+		else
+			break;
+		endif;
+		pageNum = pageNum + 1;
+	endwhile;
+
+	//release heap pages
+	alias memPage R7;
+	pageNum = 2;
+	while(pageNum <= 3) do
+		memPage = [pageTableEntry + 2*pageNum];
+		//if page is allocated and is not shared(only used by one process)
+		if(memPage != -1 && [MEMORY_FREE_LIST + memPage] == 1) then
+			multipush(R4, R5, R6, R7);
+			R1 = GET_SWAP_BLOCK;
+			call MEMORY_MANAGER;
+			multipop(R3);			//memPage
+			multipush(R3);
+			R4 = R0;
+			R1 = DISK_STORE;
+			R2 = SWAPPER_DAEMON;
+			call DEVICE_MANAGER;
+			R8 = R4;		//swap block
+			multipop(R4, R5, R6, R7);
+
+			[diskMapTableEntry + pageNum] = R8;
+			
+			multipush(R4, R5, R6);
+			R1 = RELEASE_PAGE;
+			R2 = [pageTableEntry + 2*pageNum];
+			call MEMORY_MANAGER;
+			multipop(R4, R5, R6);
+			
+			[pageTableEntry + 2*pageNum] = -1;
+		endif;
+		pageNum = pageNum + 1;
+	endwhile;
+
+	//release stack pages
+	pageNum = 8;
+	while(pageNum <= 9) do
+		memPage = [pageTableEntry + 2*pageNum];
+		multipush(R4, R5, R6, R7);
+		R1 = GET_SWAP_BLOCK;
+		call MEMORY_MANAGER;
+		multipop(R3);			//memPage
+		multipush(R3);
+		R4 = R0;
+		R1 = DISK_STORE;
+		R2 = SWAPPER_DAEMON;
+		call DEVICE_MANAGER;
+		R8 = R4;		//swap block
+		multipop(R4, R5, R6, R7);
+
+		[diskMapTableEntry + pageNum] = R8;
+		
+		multipush(R4, R5, R6);
+		R1 = RELEASE_PAGE;
+		R2 = [pageTableEntry + 2*pageNum];
+		call MEMORY_MANAGER;
+		multipop(R4, R5, R6);
+		
+		[pageTableEntry + 2*pageNum] = -1;
+		pageNum = pageNum + 1;
+	endwhile;
+	multipop(R1, R2, R3);
+	
+	[PROCESS_TABLE + 16*swapProc + 6] = 1;		//swap flag
+
+	[SYSTEM_STATUS_TABLE + 4] = [SYSTEM_STATUS_TABLE + 4] + 1;		//swapped count
+	[SYSTEM_STATUS_TABLE + 5] = 0;		//paging status
+	return;
+endif;
+
+
+if(functionNum == SWAP_IN) then
+	alias swapProc R3;
+	alias procId R4;
+	alias maxTick R5;
+	procId = SHELL_PROCESS + 1;
+	swapProc = -1;
+	maxTick = -1;
+	alias processTableEntry R6;
+	//find the swapped process in ready state having maximum tick value
+	while(procId < SWAPPER_DAEMON) do
+		processTableEntry = PROCESS_TABLE + 16*procId;
+		if([processTableEntry + 6] == 1 && [processTableEntry + 4] == READY && [processTableEntry] > maxTick) then
+			swapProc = procId;
+		endif;
+		procId = procId + 1;
+	endwhile;
+
+	if(swapProc == -1) then
+		[SYSTEM_STATUS_TABLE + 5] = 0;	//reset paging status
+		return;
+	endif;
+
+	[PROCESS_TABLE + 16*swapProc] = 0;		//reset tick
+
+	multipush(R1, R2, R3);
+	alias pageTableEntry R4;
+	pageTableEntry = PAGE_TABLE_BASE + 20*swapProc;
+	alias diskMapTableEntry R5;
+	diskMapTableEntry = DISK_MAP_TABLE + 10*swapProc;
+
+	//swap all heap and stack pages
+	alias pageNum R6;
+	pageNum = 2;
+
+	while(pageNum <= 9) do
+		//(heap won't be swapped if shared or not allocated)
+		//if the page was swapped out
+		if([diskMapTableEntry + pageNum] != -1) then
+			multipush(R4);
+
+			multipush(R5, R6);
+			R1 = GET_FREE_PAGE;
+			call MEMORY_MANAGER;
+			multipop(R5, R6);
+
+			multipush(R0);
+
+			multipush(R5, R6);
+			R3 = R0;
+			R1 = DISK_LOAD;
+			R2 = SWAPPER_DAEMON;
+			R4 = [diskMapTableEntry + pageNum];
+			call DEVICE_MANAGER;
+			
+			R2 = R4;
+			R1 = RELEASE_BLOCK;
+			R3 = SWAPPER_DAEMON;
+			call MEMORY_MANAGER;
+			multipop(R5, R6);
+
+			multipop(R0);
+
+			multipop(R4);
+
+			[pageTableEntry + 2*pageNum] = R0;
+			[pageTableEntry + 2*pageNum + 1] = "0110";
+
+			[diskMapTableEntry + pageNum] = -1;
+		
+		endif;
+		
+		pageNum = pageNum + 1;
+		if(pageNum == 4) then
+			pageNum = 8;		//go to stack
+		endif;
+	endwhile;
+
+	multipop(R1, R2, R3);
+
+	[PROCESS_TABLE + 16*swapProc + 6] = 0;		//swap flag
+
+	[SYSTEM_STATUS_TABLE + 4] = [SYSTEM_STATUS_TABLE + 4] - 1;		//swapped count
+	[SYSTEM_STATUS_TABLE + 5] = 0;		//paging status
+	return;
+endif;

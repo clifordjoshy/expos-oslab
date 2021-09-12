@@ -1,0 +1,224 @@
+//module 3
+alias functionNum R1;
+
+if(functionNum == OPEN) then
+	alias fileName R2;
+
+	alias inodeIndex R3;
+	inodeIndex = 0;
+	while(inodeIndex < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*inodeIndex + 1] == fileName) then
+			break;
+		endif;
+		inodeIndex = inodeIndex + 1;
+	endwhile;
+
+	if(inodeIndex == MAX_FILE_NUM) then
+		R0 = -1;
+		goto release_inode_return;
+	endif;
+
+	multipush(R1, R2, R3);
+	R1 = ACQUIRE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	//R3 contains inode index
+	call RESOURCE_MANAGER;
+	multipop(R1, R2, R3);
+	if(R0 == -1) then
+		return;
+	endif;
+	
+	//data and root file can be read. exec cannot
+	if([INODE_TABLE + 16*inodeIndex] == EXEC) then
+		R0 = -1;
+		goto release_inode_return;
+	endif;
+
+	alias openTableIndex R4;
+	openTableIndex = 0;
+	while(openTableIndex < MAX_OPENFILE_NUM) do
+		if([OPEN_FILE_TABLE + 4*openTableIndex] == -1) then
+			break;
+		endif;
+		openTableIndex = openTableIndex + 1;
+	endwhile;
+
+	if(openTableIndex == MAX_OPENFILE_NUM) then
+		R0 = -1;
+		goto release_inode_return;
+	endif;
+
+	//no need of file open count for root file since it's loaded already in boot module
+
+	if([INODE_TABLE + 16*inodeIndex + 1] == "root") then
+		[OPEN_FILE_TABLE + 4*openTableIndex] = INODE_ROOT;		//inode index
+	else
+		//file open count
+		if([FILE_STATUS_TABLE + 4*inodeIndex + 1] == -1) then
+			[FILE_STATUS_TABLE + 4*inodeIndex + 1] = 1;
+		else
+			[FILE_STATUS_TABLE + 4*inodeIndex + 1] = [FILE_STATUS_TABLE + 4*inodeIndex + 1] + 1;
+		endif;
+
+		[OPEN_FILE_TABLE + 4*openTableIndex] = inodeIndex;		//inode index
+	endif;
+
+	[OPEN_FILE_TABLE + 4*openTableIndex + 1] = 1;			//open instance count
+	[OPEN_FILE_TABLE + 4*openTableIndex + 2] = 0;			//lseek
+
+
+	R0 = openTableIndex;
+
+	release_inode_return:
+	multipush(R0, R1, R2);
+	R1 = RELEASE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	//R3 contains inode index
+	call RESOURCE_MANAGER;
+	multipop(R0, R1, R2);
+	return;
+endif;
+
+
+if(functionNum == CLOSE) then
+	alias openTableIndex R2;
+	
+	alias inodeIndex R3;
+	inodeIndex = [OPEN_FILE_TABLE + 4*openTableIndex];
+
+	//decrement open instance count
+	R4 = OPEN_FILE_TABLE + 4*openTableIndex + 1;
+	[R4] = [R4] - 1;
+
+	if([R4] == 0) then
+		[OPEN_FILE_TABLE + 4*openTableIndex + 0] = -1;
+		[OPEN_FILE_TABLE + 4*openTableIndex + 1] = -1;
+		[OPEN_FILE_TABLE + 4*openTableIndex + 2] = -1;
+
+		if(inodeIndex != INODE_ROOT) then
+			//decrement file open count
+			R4 = FILE_STATUS_TABLE + 4*inodeIndex + 1;
+			[R4] = [R4] - 1;
+
+			if([R4] == 0) then
+				[R4] = -1;
+			endif;
+		endif;
+
+	endif;
+
+	return;
+endif;
+
+
+if(functionNum == BUFFERED_READ) then
+	alias blockNumber R2;
+	alias offset R3;
+	alias memoryAddress R4;			//to read to
+
+	alias bufferIndex R5;
+	bufferIndex = blockNumber % 4;
+
+	multipush(R1, R2, R3, R4, R5);
+	R1 = ACQUIRE_BUFFER;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = bufferIndex;
+	call RESOURCE_MANAGER;
+	multipop(R1, R2, R3, R4, R5);
+
+	alias bufferEntry R6;
+	bufferEntry = BUFFER_TABLE + 4*bufferIndex;
+
+	//if the buffer contains a different disk block
+	if([bufferEntry] != blockNumber) then
+		//if dirty bit is set
+		if([bufferEntry + 1] == 1) then
+			multipush(R1, R2, R3, R4, R5, R6);
+			R1 = DISK_STORE;
+			R2 = [SYSTEM_STATUS_TABLE + 1];
+			R3 = BUFFER_BASE + bufferIndex;
+			R4 = [bufferEntry];
+			call DEVICE_MANAGER;
+			multipop(R1, R2, R3, R4, R5, R6);
+
+			[bufferEntry + 1] = 0;		 //reset dirty bit
+		endif;
+
+		multipush(R1, R2, R3, R4, R5, R6);
+		R4 = blockNumber;		//from R2
+		R1 = DISK_LOAD;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = BUFFER_BASE + bufferIndex;
+		call DEVICE_MANAGER;
+		multipop(R1, R2, R3, R4, R5, R6);
+
+		[bufferEntry] = blockNumber;
+	endif;
+
+	[memoryAddress] = [BUFFER + PAGE_SIZE*bufferIndex + offset];
+
+	multipush(R1, R2, R3, R4);
+	R1 = RELEASE_BUFFER;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = bufferIndex;
+	call RESOURCE_MANAGER;
+	multipop(R1, R2, R3, R4);
+
+	return;
+endif;
+
+
+if(functionNum == BUFFERED_WRITE) then
+	alias blockNumber R2;
+	alias offset R3;
+	alias word R4;
+
+	alias bufferIndex R5;
+	bufferIndex = blockNumber % 4;
+
+	multipush(R1, R2, R3, R4, R5);
+	R1 = ACQUIRE_BUFFER;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = bufferIndex;
+	call RESOURCE_MANAGER;
+	multipop(R1, R2, R3, R4, R5);
+
+	alias bufferEntry R6;
+	bufferEntry = BUFFER_TABLE + 4*bufferIndex;
+
+	//if the buffer contains a different disk block
+	if([bufferEntry] != blockNumber) then
+		//if dirty bit is set
+		if([bufferEntry + 1] == 1) then
+			multipush(R1, R2, R3, R4, R5, R6);
+			R1 = DISK_STORE;
+			R2 = [SYSTEM_STATUS_TABLE + 1];
+			R3 = BUFFER_BASE + bufferIndex;
+			R4 = [bufferEntry];
+			call DEVICE_MANAGER;
+			multipop(R1, R2, R3, R4, R5, R6);
+		endif;
+
+		multipush(R1, R2, R3, R4, R5, R6);
+		R4 = blockNumber;		//from R2
+		R1 = DISK_LOAD;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R3 = BUFFER_BASE + bufferIndex;
+		call DEVICE_MANAGER;
+		multipop(R1, R2, R3, R4, R5, R6);
+
+		[bufferEntry] = blockNumber;
+	endif;
+
+	[BUFFER + PAGE_SIZE*bufferIndex + offset] = word;
+	[bufferEntry + 1] = 1;		 //set dirty bit
+
+	multipush(R1, R2, R3, R4);
+	R1 = RELEASE_BUFFER;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = bufferIndex;
+	call RESOURCE_MANAGER;
+	multipop(R1, R2, R3, R4);
+
+	return;
+endif;

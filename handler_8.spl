@@ -1,0 +1,196 @@
+//fork
+
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = INT_FORK;
+alias userSP R0;
+userSP = SP;
+
+//set uptr for process to sp
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+
+// Setting SP to top of uareapage  [kernel stack]
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+
+alias pidChild R1;
+multipush(R0);
+R1 = GET_PCB_ENTRY;
+call PROCESS_MANAGER;
+pidChild = R0;
+multipop(R0);
+
+if(pidChild == -1) then
+	//max processes reached[16]
+	[([PTBR + 2 * ((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
+	SP = userSP;
+	//reset mode flag to 0
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+	ireturn;
+endif;
+
+alias pidParent R2;
+pidParent = [SYSTEM_STATUS_TABLE + 1];
+
+//if heap is not allocated. assign one to parent process
+if([PAGE_TABLE_BASE + 20*pidParent + 4] == -1) then
+	multipush(R0, R1);
+	multipush(R2);
+	R1 = GET_FREE_PAGE;
+	call MEMORY_MANAGER;
+	multipop(R2);
+	[PAGE_TABLE_BASE + 20*pidParent + 4] = R0; 
+	[PAGE_TABLE_BASE + 20*pidParent + 5] = "0110"; 
+	multipush(R2);
+	R1 = GET_FREE_PAGE;
+	call MEMORY_MANAGER;
+	multipop(R2);
+	[PAGE_TABLE_BASE + 20*pidParent + 6] = R0; 
+	[PAGE_TABLE_BASE + 20*pidParent + 7] = "0110"; 
+	multipop(R0, R1);
+endif;
+
+
+//allocate memory for new process
+alias memStack1 R10;
+alias memStack2 R11;
+alias memUserAreaPage R12;
+
+multipush(R0, R1, R2);
+R1 = GET_FREE_PAGE;
+call MEMORY_MANAGER;
+multipush(R0);
+call MEMORY_MANAGER;
+multipush(R0);
+call MEMORY_MANAGER;
+memUserAreaPage = R0;
+multipop(R10, R11);
+multipop(R0, R1, R2);
+
+
+// copy process table
+alias processTableChild R3;
+processTableChild = PROCESS_TABLE + 16*pidChild;
+
+alias processTableParent R4;
+processTableParent = PROCESS_TABLE + 16*pidParent;
+
+[processTableChild + 3] = [processTableParent + 3];			//userid
+[processTableChild + 4] = [processTableParent + 4];			//state
+[processTableChild + 4] = [processTableParent + 4];			//state
+[processTableChild + 5] = [processTableParent + 5];			//state
+[processTableChild + 6] = [processTableParent + 6];			//swap flag
+[processTableChild + 7] = [processTableParent + 7];			//inode index
+[processTableChild + 10] = [processTableParent + 10];		//user area swap status
+[processTableChild + 13] = [processTableParent + 13];		//uptr
+
+[processTableChild + 0] = 0;														//tick
+[processTableChild + 2] = pidParent;										//ppid
+[processTableChild + 9] = 0;														//mode flag
+[processTableChild + 11] = memUserAreaPage;							//user area page
+[processTableChild + 12] = 0;														//kptr
+
+//PID, PTBR and PTLR fields of the child process are already initialized in GET_PCB_ENTRY
+
+
+//copy the per process resource table to child
+alias procResTableInd R5;
+alias parentTable R6;
+alias childTable R7;
+procResTableInd = 0;
+parentTable = ([processTableParent+11] * PAGE_SIZE) + RESOURCE_TABLE_OFFSET;
+childTable  = ([processTableChild +11] * PAGE_SIZE) + RESOURCE_TABLE_OFFSET;
+alias resTableEntry R8;
+while(procResTableInd < 8) do
+	resTableEntry = parentTable + (procResTableInd*2);
+
+	[childTable + (procResTableInd*2)] = [resTableEntry];
+	[childTable + (procResTableInd*2) + 1] = [resTableEntry + 1];
+
+	//update process count in semaphore table
+	if([resTableEntry] == SEMAPHORE) then
+		R13 = SEMAPHORE_TABLE + 4*[resTableEntry+1] + 1;
+		[R13] = [R13] + 1;
+	endif;
+	
+	//update open instance count in open file table
+	if([resTableEntry] == FILE) then
+		R13 = OPEN_FILE_TABLE + 4*[resTableEntry+1] + 1;
+		[R13] = [R13] + 1;
+	endif;
+
+	procResTableInd = procResTableInd + 1;
+endwhile;
+
+
+//copy per process disk map table
+alias diskMapTableInd R5;
+diskMapTableInd = 2;
+parentTable = DISK_MAP_TABLE + 10*pidParent;
+childTable  = DISK_MAP_TABLE + 10*pidChild;
+while(diskMapTableInd < 10) do
+	[childTable + diskMapTableInd] = [parentTable + diskMapTableInd];
+	diskMapTableInd = diskMapTableInd + 1;
+endwhile;
+
+
+//initialise the page table of child
+
+//copy library, heap and code
+alias pageTableInd R5;
+pageTableInd = 0;
+parentTable = PAGE_TABLE_BASE + 20*pidParent;
+childTable = PAGE_TABLE_BASE + 20*pidChild;
+while(pageTableInd < 8) do
+	[childTable + 2*pageTableInd] = [parentTable + 2*pageTableInd];
+	R8 = MEMORY_FREE_LIST + [childTable + 2*pageTableInd];
+	[R8] = [R8] + 1;
+	[childTable + 2*pageTableInd + 1] = [parentTable + 2*pageTableInd + 1];
+	pageTableInd = pageTableInd + 1;
+endwhile;
+
+//assign stack pages
+[childTable + 16] = memStack1;
+[childTable + 17] = "0110";
+[childTable + 18] = memStack2;
+[childTable + 19] = "0110";
+
+//copy parent stack to child
+alias stackWordIndex R5;
+alias parentStack R6;
+alias childStack R7;
+
+//copy stack [backwards]
+stackWordIndex = userSP % PAGE_SIZE;
+
+if(userSP/PAGE_SIZE == 9) then
+	parentStack = [PAGE_TABLE_BASE + 20*pidParent + 18] * PAGE_SIZE;
+	childStack  = [PAGE_TABLE_BASE + 20*pidChild  + 18] * PAGE_SIZE;
+	while(stackWordIndex >= 0) do
+		[childStack + stackWordIndex] = [parentStack + stackWordIndex];
+		stackWordIndex = stackWordIndex - 1;
+	endwhile;
+	
+	stackWordIndex = 511;
+endif;
+
+parentStack = [PAGE_TABLE_BASE + 20*pidParent + 16] * PAGE_SIZE;
+childStack  = [PAGE_TABLE_BASE + 20*pidChild  + 16] * PAGE_SIZE;
+
+while(stackWordIndex >= 0) do
+	[childStack + stackWordIndex] = [parentStack + stackWordIndex];
+	stackWordIndex = stackWordIndex - 1;
+endwhile;
+
+//push bp register to child kernel stack
+[[PROCESS_TABLE + 16*pidChild + 11] * PAGE_SIZE] = BP;
+
+//set return values for parent and child
+[([PAGE_TABLE_BASE + 20*pidChild  + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = 0;
+[([PAGE_TABLE_BASE + 20*pidParent + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = pidChild;
+
+
+//child process state
+[PROCESS_TABLE + 16*pidChild + 4] = CREATED;
+
+//reset mode flag to 0
+[PROCESS_TABLE + pidParent*16 + 9] = 0;
+SP = userSP;
+ireturn;

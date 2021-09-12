@@ -1,0 +1,26 @@
+//update user sp
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+// Switch to kernel stack
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * 512 - 1;
+
+backup;
+
+alias reqPID R0;
+alias processTableEntry R1;
+
+reqPID = [TERMINAL_STATUS_TABLE+1];
+processTableEntry = PROCESS_TABLE + 16*reqPID;
+
+[processTableEntry + 8] = P0;
+
+multipush(R0, R1);
+R1 = RELEASE_TERMINAL;
+R2 = reqPID;
+call RESOURCE_MANAGER;
+multipop(R0, R1);
+
+restore;
+
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13];
+
+ireturn;

@@ -1,0 +1,179 @@
+//create, delete
+
+alias systemCallNum R0;
+systemCallNum = [([PTBR + 2 * ((SP-5)/PAGE_SIZE)] * PAGE_SIZE) + ((SP-5) % PAGE_SIZE)];
+
+//mode flag
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = systemCallNum;
+
+alias userSP R1;
+userSP = SP;
+
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+
+alias returnValue R11;
+
+if(systemCallNum == INT_CREATE) then
+	alias fileName R2;
+	alias permission R3;
+	fileName = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+	permission = [([PTBR + 2 * ((userSP-3)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-3) % PAGE_SIZE)];
+
+	alias fileIndex R4;
+	fileIndex = 0;
+	
+	//check if filename already exists
+	while(fileIndex < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*fileIndex + 1] == fileName) then
+			returnValue = 0;
+			goto return_to_user;
+		endif;
+		fileIndex = fileIndex + 1;
+	endwhile;	
+
+	//find empty slot
+	fileIndex = 0;
+	while(fileIndex < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*fileIndex + 1] == -1) then
+			break;
+		endif;
+		fileIndex = fileIndex + 1;
+	endwhile;
+
+	//max number of files reached
+	if(fileIndex == MAX_FILE_NUM) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	alias inodeTableEntry R5;
+	alias rootFileEntry R6;
+	inodeTableEntry = INODE_TABLE + 16*fileIndex;
+	rootFileEntry = ROOT_FILE + 8*fileIndex;
+
+	[inodeTableEntry + 0] = DATA;
+	[inodeTableEntry + 1] = fileName;
+	[inodeTableEntry + 2] = 0;					//file size
+	[inodeTableEntry + 3] = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 3];		//user id
+	[inodeTableEntry + 4] = permission;
+	//disk blocks
+	[inodeTableEntry + 8]  = -1;
+	[inodeTableEntry + 9]  = -1;
+	[inodeTableEntry + 10] = -1;
+	[inodeTableEntry + 11] = -1;
+
+	[rootFileEntry + 0] = fileName;
+	[rootFileEntry + 1] = 0;
+	[rootFileEntry + 2] = DATA;
+	[rootFileEntry + 3] = [USER_TABLE + [inodeTableEntry + 3]*2];			//username
+	[rootFileEntry + 4] = permission;
+
+	returnValue = 0;
+	goto return_to_user;
+endif;
+
+
+if(systemCallNum == INT_DELETE) then
+	alias fileName R2;
+	fileName = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+	alias fileIndex R3;
+	fileIndex = 0;
+	
+	//check if filename exists
+	while(fileIndex < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*fileIndex + 1] == fileName) then
+			break;
+		endif;
+		fileIndex = fileIndex + 1;
+	endwhile;
+
+	if(fileIndex == MAX_FILE_NUM) then
+		returnValue = 0;
+		goto return_to_user;
+	endif;
+
+	alias inodeTableEntry R4;
+	inodeTableEntry = INODE_TABLE + 16*fileIndex;
+	
+	if([inodeTableEntry] != DATA) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	//if exclusive permission is set and current user is neither owner nor root
+	if(
+		[inodeTableEntry + 4] == EXCLUSIVE && 
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE+1]*16 + 3] != ROOT &&
+		[inodeTableEntry + 3] != [PROCESS_TABLE + [SYSTEM_STATUS_TABLE+1]*16 + 3]
+	) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	multipush(R0, R1, R2, R3, R4);
+	R1 = ACQUIRE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	//R3 contains fileIndex
+	call RESOURCE_MANAGER;
+	multipop(R0, R1, R2, R3, R4);
+	
+	//check file open count. if not -1, then file is open
+	if([FILE_STATUS_TABLE + 4*fileIndex + 1] != -1) then
+		multipush(R1);
+		R1 = RELEASE_INODE;
+		R2 = [SYSTEM_STATUS_TABLE + 1];
+		//R3 contains fileIndex
+		call RESOURCE_MANAGER;
+		multipop(R1);
+
+		returnValue = -2;
+		goto return_to_user;
+	endif;
+
+	alias diskBlockNum R5;
+	diskBlockNum = 0;
+	alias diskBlockId R6;
+
+	while(diskBlockNum < 4) do
+		diskBlockId = [inodeTableEntry + 8 + diskBlockNum];
+		//if disk block is allocated and loaded to buffer and the dirty bit is set
+		if(
+			diskBlockId != -1 && 
+			[BUFFER_TABLE + 4*(diskBlockId%MAX_BUFFER)] == diskBlockId && 
+			[BUFFER_TABLE + 4*(diskBlockId%MAX_BUFFER) + 1] == 1
+		) then
+			[BUFFER_TABLE + 4*(diskBlockId%MAX_BUFFER) + 1] = 0;
+
+			multipush(R0, R1, R2, R3, R4, R5, R6);
+			R1 = RELEASE_BLOCK;
+			R2 = diskBlockId;
+			R3 = [SYSTEM_STATUS_TABLE + 1];
+			call MEMORY_MANAGER;
+			multipop(R0, R1, R2, R3, R4, R5, R6);
+		endif;
+
+		diskBlockNum = diskBlockNum + 1;
+	endwhile;
+
+	[inodeTableEntry + 1] = -1;
+	[ROOT_FILE + 8*fileIndex] = -1;
+
+	multipush(R1);
+	R1 = RELEASE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	//R3 contains fileIndex
+	call RESOURCE_MANAGER;
+	multipop(R1);
+
+	returnValue = 0;
+	goto return_to_user;
+endif;
+
+return_to_user:
+[([PTBR + 2 * ((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+SP = userSP;
+ireturn;

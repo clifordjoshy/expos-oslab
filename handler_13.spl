@@ -1,0 +1,88 @@
+//semget, semrelease
+
+alias systemCallNum R0;
+systemCallNum = [([PTBR + 2 * ((SP-5)/PAGE_SIZE)] * PAGE_SIZE) + ((SP-5) % PAGE_SIZE)];
+
+//mode flag
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = systemCallNum;
+
+alias userSP R1;
+userSP = SP;
+
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+
+if(systemCallNum == INT_SEMGET) then
+	alias entryIndex R2;
+	entryIndex = 0;
+	alias resTable R3;
+	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
+
+	//find empty slot in per process resource table
+	while (entryIndex < 8) do
+		if ([resTable + 2*entryIndex] == -1) then
+			break;
+		endif;
+		entryIndex = entryIndex + 1;
+	endwhile;
+
+	if (entryIndex == 8) then
+		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1]*16 + 9] = 0;
+		SP = userSP;
+		ireturn;
+	endif;
+
+	[resTable + 2*entryIndex] = SEMAPHORE;
+	
+	alias semaphoreIndex R4;
+	multipush(R0, R1, R2, R3);
+	R1 = ACQUIRE_SEMAPHORE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	call RESOURCE_MANAGER;
+	semaphoreIndex = R0;	
+	multipop(R0, R1, R2, R3);
+
+	if(semaphoreIndex == -1) then
+		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -2;
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1]*16 + 9] = 0;
+		SP = userSP;
+		ireturn;
+	endif;
+	
+	[resTable + 2*entryIndex + 1] = semaphoreIndex;
+
+	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = semaphoreIndex;
+endif;
+
+
+if(systemCallNum == INT_SEMRELEASE) then
+	alias semId R2;
+	semId = [([PTBR + 2*((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+	
+	alias resTable R3;
+	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
+	
+	if(semId < 0 || semId >7 || [resTable + 2*semId] != SEMAPHORE) then
+		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1]*16 + 9] = 0;
+		SP = userSP;
+		ireturn;
+	endif;
+
+	multipush(R0, R1, R2, R3);
+	R3 = [resTable + 2*semId + 1];		//semId is in R2
+	R1 = RELEASE_SEMAPHORE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	call RESOURCE_MANAGER;
+	multipop(R0, R1, R2, R3);
+
+	[resTable + 2*semId] = -1;
+
+	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = 0;
+endif;
+
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+SP = userSP;
+ireturn;

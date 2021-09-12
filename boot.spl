@@ -1,0 +1,101 @@
+//load idle code from memory
+loadi(69, 11);
+loadi(70, 12);
+
+//load module 7
+loadi(54, 67);
+loadi(55, 68);
+
+
+//user area for idle process. needed for boot module 
+SP = 76*PAGE_SIZE - 1;
+call BOOT_MODULE;
+
+//setup idle process
+
+//Library
+[PAGE_TABLE_BASE+0] = -1;
+[PAGE_TABLE_BASE+1] = "0000";
+[PAGE_TABLE_BASE+2] = -1;
+[PAGE_TABLE_BASE+3] = "0000";
+//Heap
+[PAGE_TABLE_BASE+4] = -1;
+[PAGE_TABLE_BASE+5] = "0000";
+[PAGE_TABLE_BASE+6] = -1;
+[PAGE_TABLE_BASE+7] = "0000";
+//Code
+[PAGE_TABLE_BASE+8] = 69;
+[PAGE_TABLE_BASE+9] = "0100";
+[PAGE_TABLE_BASE+10] = -1;
+[PAGE_TABLE_BASE+11] =  "0000";
+[PAGE_TABLE_BASE+12] = -1;
+[PAGE_TABLE_BASE+13] = "0000";
+[PAGE_TABLE_BASE+14] = -1;
+[PAGE_TABLE_BASE+15] = "0000";
+//Stack
+[PAGE_TABLE_BASE+16] = 70;
+[PAGE_TABLE_BASE+17] = "0110";
+[PAGE_TABLE_BASE+18] = -1;
+[PAGE_TABLE_BASE+19] = "0000";
+//Entry Point (first value in stack to init code header)
+[70*PAGE_SIZE] = [69*PAGE_SIZE + 1];
+
+[PROCESS_TABLE + 0] = 0;                    //tick
+[PROCESS_TABLE + 1] = IDLE_PROCESS;         //pid
+[PROCESS_TABLE + 3] = KERNEL;               //userid
+[PROCESS_TABLE + 4] = RUNNING;              //state
+[PROCESS_TABLE + 11] = 76;                  //user area page
+[PROCESS_TABLE + 12] = 0;                   //kptr
+[PROCESS_TABLE + 13] = 8*PAGE_SIZE;         //uptr
+[PROCESS_TABLE + 14] = PAGE_TABLE_BASE;     //ptbr
+[PROCESS_TABLE + 15] = 10;                  //ptlr
+
+//setup swapper daemon
+alias pageTableEntry R0;
+pageTableEntry = PAGE_TABLE_BASE + 20*SWAPPER_DAEMON;
+//Library
+[pageTableEntry + 0] = -1;
+[pageTableEntry + 1] = "0000";
+[pageTableEntry + 2] = -1;
+[pageTableEntry + 3] = "0000";
+//Heap
+[pageTableEntry + 4] = -1;
+[pageTableEntry + 5] = "0000";
+[pageTableEntry + 6] = -1;
+[pageTableEntry + 7] = "0000";
+//Code && 
+[pageTableEntry + 8] = 69;
+[pageTableEntry + 9] = "0100";
+[pageTableEntry + 10] = -1;
+[pageTableEntry + 11] =  "0000";
+[pageTableEntry + 12] = -1;
+[pageTableEntry + 13] = "0000";
+[pageTableEntry + 14] = -1;
+[pageTableEntry + 15] = "0000";
+//Stack
+[pageTableEntry + 16] = 81;
+[pageTableEntry + 17] = "0110";
+[pageTableEntry + 18] = -1;
+[pageTableEntry + 19] = "0000";
+//Entry Point (first value in stack to init code header)
+[81*PAGE_SIZE] = [69*PAGE_SIZE + 1];
+
+alias processTableEntry R0;
+processTableEntry = PROCESS_TABLE + 16*SWAPPER_DAEMON;
+[processTableEntry + 0] = 0;
+[processTableEntry + 1] = SWAPPER_DAEMON;
+[processTableEntry + 3] = KERNEL;
+[processTableEntry + 4] = CREATED;
+[processTableEntry + 11] = 82;
+[processTableEntry + 12] = 0;
+[processTableEntry + 13] = 8*PAGE_SIZE;
+[processTableEntry + 14] = PAGE_TABLE_BASE + 20*SWAPPER_DAEMON;
+[processTableEntry + 15] = 10;
+
+
+[SYSTEM_STATUS_TABLE + 1] = IDLE_PROCESS;
+PTBR = PAGE_TABLE_BASE;
+PTLR = 10;
+SP = 8*PAGE_SIZE;         //stack is in logical page 8
+
+ireturn;

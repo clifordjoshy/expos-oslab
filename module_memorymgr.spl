@@ -1,0 +1,136 @@
+//module 2
+alias functionNum R1;
+
+if(functionNum == GET_FREE_PAGE) then
+	//increment WAIT_MEM_COUNT
+	[SYSTEM_STATUS_TABLE + 3] = [SYSTEM_STATUS_TABLE + 3] + 1;
+	
+	while([SYSTEM_STATUS_TABLE+2] == 0) do		//MEM_FREE_COUNT
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE+1]*16 + 4] = WAIT_MEM;
+		multipush(R1);
+		call CONTEXT_SWITCH;
+		multipop(R1);
+	endwhile;
+
+	//decrement WAIT_MEM_COUNT and MEM_FREE_COUNT
+	[SYSTEM_STATUS_TABLE + 3] = [SYSTEM_STATUS_TABLE + 3] - 1;
+	[SYSTEM_STATUS_TABLE + 2] = [SYSTEM_STATUS_TABLE + 2] - 1;
+
+	alias freePage R0;
+	alias memPage R2;
+	memPage = 76;
+	while(memPage < 128) do
+		if([MEMORY_FREE_LIST + memPage] == 0) then
+			freePage = memPage;
+			[MEMORY_FREE_LIST + memPage] = 1;
+			break;
+		endif;
+		memPage = memPage + 1;
+	endwhile;
+
+	return;
+endif;
+
+
+if (functionNum == RELEASE_PAGE) then
+	alias releasePage R2;
+	[MEMORY_FREE_LIST + releasePage] = [MEMORY_FREE_LIST + releasePage] - 1;
+	
+	if ([MEMORY_FREE_LIST + releasePage] == 0) then
+		[SYSTEM_STATUS_TABLE + 2] = [SYSTEM_STATUS_TABLE + 2] + 1;		//increment mem free count
+	endif;
+
+	alias procId R3 ;
+	procId = 0;
+	while(procId < MAX_PROC_NUM) do
+		if([PROCESS_TABLE + 16*procId + 4] == WAIT_MEM) then
+			[PROCESS_TABLE + 16*procId + 4] = READY;
+		endif;
+		procId = procId + 1;
+	endwhile;
+
+	return;
+endif;
+
+
+if(functionNum == GET_CODE_PAGE) then
+	alias blockNumber R2;
+
+	//check if block is present in memory already
+	alias procId R3;
+	alias diskMapTableEntry R4;
+	alias codePageIndex R5;
+
+	procId = 0;
+	while(procId < MAX_PROC_NUM) do
+		diskMapTableEntry = DISK_MAP_TABLE + 10*procId;
+		
+		codePageIndex = 0;
+		while(codePageIndex < 4) do
+			if([diskMapTableEntry + 4 + codePageIndex] == blockNumber && [PAGE_TABLE_BASE + 20*procId + 8 + 2*codePageIndex] != -1) then
+				R0 = [PAGE_TABLE_BASE + 20*procId + 8 + 2*codePageIndex];
+				[MEMORY_FREE_LIST + R0] = [MEMORY_FREE_LIST + R0] + 1;
+				return;
+			endif;
+			codePageIndex = codePageIndex + 1;
+		endwhile;
+
+		procId = procId + 1;
+	endwhile;
+
+	multipush(R1, R2);
+	R1 = GET_FREE_PAGE;
+	call MEMORY_MANAGER;
+	multipop(R1, R2);
+
+	multipush(R0, R1, R2);
+	R4 = blockNumber; //from R2
+	R1 = DISK_LOAD;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = R0;
+	call DEVICE_MANAGER;
+	multipop(R0, R1, R2);
+	//R0 contains allocated page.
+	return;
+endif;
+
+
+if(functionNum == RELEASE_BLOCK) then
+	alias blockNumber R2;
+	[DISK_FREE_LIST + blockNumber] = 0;
+	return;
+endif;
+
+
+if(functionNum == GET_FREE_BLOCK) then
+	alias blockIndex R2;
+	blockIndex = DISK_FREE_AREA;
+	while(blockIndex < DISK_SWAP_AREA) do
+		if([DISK_FREE_LIST + blockIndex] == 0) then
+			[DISK_FREE_LIST + blockIndex] = 1;
+			R0 = blockIndex;
+			return;
+		endif;
+		blockIndex = blockIndex + 1;
+	endwhile;
+
+	R0 = -1;
+	return;
+endif;
+
+
+if(functionNum == GET_SWAP_BLOCK) then
+	alias diskIndex R2;
+	diskIndex = DISK_SWAP_AREA;
+	while(diskIndex < DISK_SIZE) do
+		if([DISK_FREE_LIST + diskIndex] == 0) then
+			[DISK_FREE_LIST + diskIndex] = 1;
+			R0 = diskIndex;
+			return; 
+		endif;
+		diskIndex = diskIndex + 1;
+	endwhile;
+
+	R0 = -1;
+	return;
+endif;

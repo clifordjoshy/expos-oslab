@@ -1,0 +1,159 @@
+//open, close, seek file
+
+alias systemCallNum R0;
+systemCallNum = [([PTBR + 2 * ((SP-5)/PAGE_SIZE)] * PAGE_SIZE) + ((SP-5) % PAGE_SIZE)];
+
+//mode flag
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = systemCallNum;
+
+alias userSP R1;
+userSP = SP;
+
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+
+alias returnValue R11;
+
+if(systemCallNum == INT_OPEN) then
+	alias entryIndex R2;
+	entryIndex = 0;
+	alias resTable R3;
+	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
+
+	//find empty slot in per process resource table
+	while (entryIndex < 8) do
+		if ([resTable + 2*entryIndex] == -1) then
+			break;
+		endif;
+		entryIndex = entryIndex + 1;
+	endwhile;
+
+	if (entryIndex == 8) then
+		returnValue = -3;
+		goto return_to_user;
+	endif;
+
+	alias fileTableIndex R4;
+
+	multipush(R0, R1, R2, R3);
+	R2 = [([PTBR + 2*((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];		//filename
+	R1 = OPEN;
+	call FILE_MANAGER;
+	fileTableIndex = R0;
+	multipop(R0, R1, R2, R3);
+
+	if(fileTableIndex < 0) then
+		returnValue = fileTableIndex;
+		goto return_to_user;
+	endif;
+
+	[resTable + 2*entryIndex] = FILE;
+	[resTable + 2*entryIndex + 1] = fileTableIndex;
+
+	returnValue = entryIndex;
+	goto return_to_user;
+endif;
+
+
+if(systemCallNum == INT_CLOSE) then
+	alias fileDescriptor R2;
+	fileDescriptor = [([PTBR + 2*((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+	alias resTable R3;
+	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
+	
+	if(fileDescriptor < 0 || fileDescriptor > 7 || [resTable + 2*fileDescriptor] != FILE) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+	
+	multipush(R0, R1, R2, R3);
+	R2 = [resTable + 2*fileDescriptor + 1];
+	R1 = CLOSE;
+	call FILE_MANAGER;
+	multipop(R0, R1, R2, R3);
+
+	[resTable + 2*fileDescriptor] = -1;
+	returnValue = 0;
+	goto return_to_user;
+endif;
+
+
+if(systemCallNum == INT_SEEK)	then
+	alias fileDescriptor R2;
+	fileDescriptor = [([PTBR + 2*((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+	alias offset R3;
+	offset = [([PTBR + 2*((userSP-3)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-3) % PAGE_SIZE)];
+
+	alias resTable R4;
+	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
+	
+	if(fileDescriptor < 0 || fileDescriptor > 7 || [resTable + 2*fileDescriptor] != FILE) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	alias openTableEntry R5;
+	openTableEntry = OPEN_FILE_TABLE + 4*[resTable + 2*fileDescriptor + 1];
+
+	alias inodeIndex R6;
+	inodeIndex = [openTableEntry];
+	
+	multipush(R0, R1, R2, R3, R4, R5, R6);
+	R1 = ACQUIRE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = inodeIndex;
+	call RESOURCE_MANAGER;
+	returnValue = R0;
+	multipop(R0, R1, R2, R3, R4, R5, R6);
+	
+	if(returnValue == -1) then
+		goto return_to_user;
+	endif;
+
+	alias lSeek R7;
+	lSeek = [openTableEntry + 2];
+
+	alias fileSize R8;
+	if(inodeIndex == INODE_ROOT) then
+		fileSize = 480;
+	else
+		fileSize = [INODE_TABLE + 16*inodeIndex + 2];
+	endif;
+
+	//if offset makes lSeek negative
+	if(lSeek + offset < 0) then
+		returnValue = -2;
+		goto release_inode_return;
+	endif;
+
+	if(offset == 0) then
+		lSeek = 0;
+	else 
+		lSeek = lSeek + offset;
+		if(lSeek > fileSize) then
+			lSeek = fileSize;
+		endif;
+	endif;
+	
+	[openTableEntry + 2] = lSeek;
+
+	returnValue = 0;
+
+	release_inode_return:
+	multipush(R1, R11);
+	R1 = RELEASE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = inodeIndex;
+	call RESOURCE_MANAGER;
+	multipop(R1, R11);
+	goto return_to_user;
+endif;
+
+
+return_to_user:
+[([PTBR + 2 * ((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+SP = userSP;
+ireturn;

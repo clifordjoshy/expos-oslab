@@ -1,0 +1,209 @@
+//module 1
+
+alias functionNum R1;
+alias currentPID R2;
+
+if(functionNum == FREE_USER_AREA_PAGE) then
+	multipush(R1);
+	alias procResTableInd R3;
+	procResTableInd = 0;
+	alias resTableEntry R4;
+	while(procResTableInd < 8) do
+		resTableEntry = ([PROCESS_TABLE + 16*currentPID + 11] * PAGE_SIZE) + RESOURCE_TABLE_OFFSET + (procResTableInd*2);
+			
+		if([resTableEntry] == SEMAPHORE) then
+			multipush(R2, R3, R4);
+			R1 = RELEASE_SEMAPHORE;
+			//R2 contains currentPID
+			R3 = [resTableEntry + 1];
+			call RESOURCE_MANAGER;
+			multipop(R2, R3, R4);
+		endif;
+
+		if([resTableEntry] == FILE) then
+			multipush(R2, R3, R4);
+			R1 = CLOSE;
+			R2 = [resTableEntry + 1];
+			call FILE_MANAGER;
+			multipop(R2, R3, R4);
+		endif;
+
+		[resTableEntry] = -1;
+		
+		procResTableInd = procResTableInd + 1;
+	endwhile;
+
+	multipop(R1);
+
+	multipush(R1, R2);
+	R1 = RELEASE_PAGE;
+	R2 = [PROCESS_TABLE + currentPID*16 + 11];
+	call MEMORY_MANAGER;
+	multipop(R1, R2);
+	return;
+endif;
+
+
+if(functionNum == EXIT_PROCESS) then
+
+		if([PROCESS_TABLE + currentPID*16 + 9] != INT_EXEC) then
+		alias procId R3;
+		procId = 0;
+		while (procId < MAX_PROC_NUM) do
+
+			if([PROCESS_TABLE + 16*procId + 4] == WAIT_PROCESS && [PROCESS_TABLE + 16*procId + 5] == currentPID) then
+				[PROCESS_TABLE + 16*procId + 4] = READY;
+			endif;
+
+			if([PROCESS_TABLE + 16*procId + 2] == currentPID) then
+				[PROCESS_TABLE + 16*procId + 2] = -1;
+			endif;
+			
+			procId = procId + 1;
+		endwhile;
+	endif;
+
+	R1 = FREE_PAGE_TABLE;
+	//R2 contains pid
+	call PROCESS_MANAGER;
+
+	R1 = FREE_USER_AREA_PAGE;
+	//R2 contains pid
+	call PROCESS_MANAGER;
+
+	R1 = EXIT_PROCESS;
+	
+	[PROCESS_TABLE + 16*currentPID + 4] = TERMINATED;
+	return;
+endif;
+
+
+if(functionNum == FREE_PAGE_TABLE) then
+	alias pageTableIndex R4;
+	alias pageTableEntry R3;
+	pageTableIndex = 2;
+	pageTableEntry = PAGE_TABLE_BASE + 20*currentPID + 2*pageTableIndex;
+	//0 and 1 are library pages
+	
+	//release memory pages
+	while(pageTableIndex < 10) do
+		if([pageTableEntry] != -1) then
+			multipush(R1, R2, R3, R4);
+			R1 = RELEASE_PAGE;
+			R2 = [pageTableEntry];
+			call MEMORY_MANAGER;
+			multipop(R1, R2, R3, R4);
+		endif;
+		
+		[pageTableEntry] = -1;
+		[pageTableEntry + 1] = "0000";
+		pageTableIndex = pageTableIndex + 1;
+		pageTableEntry = pageTableEntry + 2;
+	endwhile;
+
+	//release disk blocks for heap and stack
+	alias diskMapTableEntry R3;
+	diskMapTableEntry = DISK_MAP_TABLE + 10*currentPID;
+
+	multipush(R1, R2);
+	R1 = RELEASE_BLOCK;
+	R3 = currentPID;
+
+	if([diskMapTableEntry + 2] != -1) then	
+		R2 = [diskMapTableEntry + 2];
+		call MEMORY_MANAGER;
+		[diskMapTableEntry + 2] = -1;
+	endif;
+	
+	if([diskMapTableEntry + 3] != -1) then
+		R2 = [diskMapTableEntry + 3];
+		call MEMORY_MANAGER;
+		[diskMapTableEntry + 3] = -1;
+	endif;
+	
+	if([diskMapTableEntry + 8] != -1) then
+		R2 = [diskMapTableEntry + 8];
+		call MEMORY_MANAGER;
+		[diskMapTableEntry + 8] = -1;
+	endif;
+	
+	if([diskMapTableEntry + 9] != -1) then
+		R2 = [diskMapTableEntry + 9];
+		call MEMORY_MANAGER;
+		[diskMapTableEntry + 9] = -1;
+	endif;
+	
+	[diskMapTableEntry + 4] = -1;
+	[diskMapTableEntry + 5] = -1;
+	[diskMapTableEntry + 6] = -1;
+	[diskMapTableEntry + 7] = -1;
+
+	multipop(R1, R2);
+
+	return;
+endif;
+
+
+if (functionNum == GET_PCB_ENTRY) then
+	alias procId R3;
+	procId = SHELL_PROCESS + 1;
+	R0 = -1;
+
+	while (procId < SWAPPER_DAEMON) do
+		if ([PROCESS_TABLE + 16*procId + 4] == TERMINATED) then
+			R0 = procId;
+			[PROCESS_TABLE + 16*procId + 1]	= procId;
+			[PROCESS_TABLE + 16*procId + 4]	= ALLOCATED;
+			[PROCESS_TABLE + 16*procId + 14] = PAGE_TABLE_BASE + 20*procId;
+			[PROCESS_TABLE + 16*procId + 15] = 10;
+			break;
+		endif;
+		procId = procId + 1;
+	endwhile;
+	return;
+endif;
+
+
+if(functionNum == KILL_ALL) then
+	alias inodeIndex R3;
+	inodeIndex = 0;
+	while(inodeIndex < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*inodeIndex + 1] != -1) then
+			multipush(R1, R2, R3);
+			R1 = ACQUIRE_INODE;
+			//R2 contains current PID
+			//R3 contains inode index
+			call RESOURCE_MANAGER;
+			multipop(R1, R2, R3);
+		endif;
+		inodeIndex = inodeIndex + 1;
+	endwhile;
+
+	alias procId R3;
+	procId = 2;
+	while(procId < MAX_PROC_NUM) do
+		if(procId != currentPID && [PROCESS_TABLE + 16*procId + 4] != TERMINATED) then
+			multipush(R1, R2, R3);
+			R1 = EXIT_PROCESS;
+			R2 = procId;
+			multipop(R1, R2, R3);
+		endif;
+		procId = procId + 1;
+	endwhile;
+
+	alias inodeIndex R3;
+	inodeIndex = 0;
+	while(inodeIndex < MAX_FILE_NUM) do
+		if([INODE_TABLE + 16*inodeIndex + 1] != -1) then
+			multipush(R1, R2, R3);
+			R1 = RELEASE_INODE;
+			//R2 contains current PID
+			//R3 contains inode index
+			call RESOURCE_MANAGER;
+			multipop(R1, R2, R3);
+		endif;
+		inodeIndex = inodeIndex + 1;
+	endwhile;
+
+	return;
+endif;

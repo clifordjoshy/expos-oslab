@@ -1,0 +1,189 @@
+//module 0
+alias functionNum R1;
+alias currentPID R2;
+
+if (functionNum == ACQUIRE_TERMINAL) then
+	while([TERMINAL_STATUS_TABLE] == 1) do
+		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_TERMINAL;
+		multipush(R1, R2);
+		call CONTEXT_SWITCH;
+		multipop(R1, R2);
+	endwhile;
+
+	[TERMINAL_STATUS_TABLE] = 1;
+	[TERMINAL_STATUS_TABLE + 1] = currentPID;
+
+	return;
+endif;
+
+
+if(functionNum ==  RELEASE_TERMINAL) then
+	//process is trying to release without acquiring
+	if(currentPID != [TERMINAL_STATUS_TABLE+1]) then
+		R0 = -1;
+		return;
+	endif;
+
+	[TERMINAL_STATUS_TABLE] = 0;
+	alias procId R4;
+	procId = 1;
+	while(procId < MAX_PROC_NUM) do
+		if([PROCESS_TABLE + 16*procId + 4] == WAIT_TERMINAL) then
+			[PROCESS_TABLE + 16*procId + 4] = READY;
+		endif;
+		procId = procId + 1;
+	endwhile;
+
+	R0 = 0;
+	
+	return;
+endif;
+
+
+if(functionNum == ACQUIRE_DISK) then
+	while([DISK_STATUS_TABLE] == 1) do
+		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_DISK;
+		multipush(R1, R2);
+		call CONTEXT_SWITCH;
+		multipop(R1, R2);
+	endwhile;
+
+	[DISK_STATUS_TABLE] = 1;
+	[DISK_STATUS_TABLE + 4] = currentPID;
+	return;
+endif;
+
+
+if (functionNum == ACQUIRE_SEMAPHORE) then
+	alias semTableIndex R3;
+	semTableIndex = 0;
+	while(semTableIndex < MAX_SEM_COUNT) do
+		if([SEMAPHORE_TABLE + 4*semTableIndex + 1] == 0) then
+			break;
+		endif;
+		semTableIndex = semTableIndex + 1;
+	endwhile;
+
+	if(semTableIndex < MAX_SEM_COUNT) then
+		[SEMAPHORE_TABLE + 4*semTableIndex] = -1;			//locking pid
+		[SEMAPHORE_TABLE + 4*semTableIndex + 1] = 1;	//process count
+		R0 = semTableIndex;
+	else
+		R0 = -1;
+	endif;
+
+	return;
+endif;
+
+
+if(functionNum == RELEASE_SEMAPHORE) then
+	alias semTableIndex R3;
+
+	//if locked by current process
+	if([SEMAPHORE_TABLE + 4*semTableIndex] == currentPID) then
+		[SEMAPHORE_TABLE + 4*semTableIndex] = -1;
+		
+		alias procId R4;
+		procId = 0;
+		while(procId < MAX_PROC_NUM) do
+			if([PROCESS_TABLE + 16*currentPID + 4] == WAIT_SEMAPHORE && [PROCESS_TABLE + 16*currentPID + 5] == semTableIndex) then
+				[PROCESS_TABLE + 16*currentPID + 4] = READY;
+			endif;
+			procId = procId + 1;
+		endwhile;
+
+	endif;
+
+	//decrement process count
+	[SEMAPHORE_TABLE + 4*semTableIndex + 1] = [SEMAPHORE_TABLE + 4*semTableIndex + 1]-1;
+	return;
+endif;
+
+
+if(functionNum == ACQUIRE_INODE) then
+	alias inodeIndex R3;
+
+	//busy loop while process is locked
+	while([FILE_STATUS_TABLE + 4*inodeIndex] != -1)	do
+		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_FILE;
+		[PROCESS_TABLE + 16*currentPID + 5] = inodeIndex;
+		multipush(R1, R2, R3);
+		call CONTEXT_SWITCH;
+		multipop(R1, R2, R3);
+	endwhile;
+
+	//if file was deleted while in the busy loop
+	if([INODE_TABLE + 16*inodeIndex] == -1) then
+		R0 = -1;
+	else
+		[FILE_STATUS_TABLE + 4*inodeIndex] = currentPID;
+		R0 = 0;
+	endif;
+
+	return;
+endif;
+
+
+if(functionNum == RELEASE_INODE) then
+	alias inodeIndex R3;
+
+	if([FILE_STATUS_TABLE + 4*inodeIndex] != currentPID) then
+		R0 = -1;
+		return;
+	endif;
+
+	[FILE_STATUS_TABLE + 4*inodeIndex] = -1;
+
+	alias procId R4;
+	procId = 0;
+	while(procId < MAX_PROC_NUM) do
+		if([PROCESS_TABLE + 16*procId + 4] == WAIT_FILE && [PROCESS_TABLE + 16*procId + 5] == inodeIndex) then
+			[PROCESS_TABLE + 16*procId + 4] = READY;
+		endif;
+		procId = procId + 1;
+	endwhile;
+
+	R0 = 0;
+	return;
+endif;
+
+
+if(functionNum == ACQUIRE_BUFFER) then
+	alias bufferIndex R3;
+
+	while([BUFFER_TABLE + 4*bufferIndex + 2] != -1) do
+		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_BUFFER;
+		[PROCESS_TABLE + 16*currentPID + 5] = bufferIndex;
+		multipush(R1, R2, R3);
+		call CONTEXT_SWITCH;
+		multipop(R1, R2, R3);
+	endwhile;
+
+	[BUFFER_TABLE + 4*bufferIndex + 2] = currentPID;
+
+	return;
+endif;
+
+
+if(functionNum == RELEASE_BUFFER) then
+	alias bufferIndex R3;
+
+	if([BUFFER_TABLE + 4*bufferIndex + 2] != currentPID) then
+		R0 = -1;
+		return;
+	endif;
+
+	[BUFFER_TABLE + 4*bufferIndex + 2] = -1;
+
+	alias procId R4;
+	procId = 0;
+	while(procId < MAX_PROC_NUM) do
+		if([PROCESS_TABLE + 16*procId + 4] == WAIT_BUFFER && [PROCESS_TABLE + 16*procId + 5] == bufferIndex) then
+			[PROCESS_TABLE + 16*procId + 4] = READY;
+		endif;
+		procId = procId + 1;
+	endwhile;
+
+	R0 = 0;
+	return;
+endif;

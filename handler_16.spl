@@ -1,0 +1,189 @@
+//new user, remove user, set password, get username, get user id
+alias systemCallNum R0;
+systemCallNum = [([PTBR + 2 * ((SP-5)/PAGE_SIZE)] * PAGE_SIZE) + ((SP-5) % PAGE_SIZE)];
+
+//mode flag
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = systemCallNum;
+
+alias userSP R1;
+userSP = SP;
+
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+
+alias returnValue R11;
+
+if(systemCallNum == INT_NEWUSR) then
+	if([SYSTEM_STATUS_TABLE] != ROOT || [SYSTEM_STATUS_TABLE + 1] != SHELL_PROCESS) then
+		returnValue = -2;
+		goto return_to_user;
+	endif;
+
+	alias username R2;
+	username = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+	alias password R3;
+	password = [([PTBR + 2 * ((userSP-3)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-3) % PAGE_SIZE)];
+
+	alias userTableIndex R4;
+	userTableIndex = 0;
+
+	alias userSlot R5;
+	userSlot = -1;
+
+	while(userTableIndex < MAX_USER_NUM) do
+		if([USER_TABLE + 2*userTableIndex] == username) then
+			returnValue = -1;
+			goto return_to_user;
+		endif;
+		if(userSlot == -1 && [USER_TABLE + 2*userTableIndex] == -1) then
+			userSlot = userTableIndex;
+		endif;
+		userTableIndex = userTableIndex + 1;
+	endwhile;
+
+	if(userSlot == -1) then
+		returnValue = -3;
+		goto return_to_user;
+	endif;
+
+	encrypt password;
+
+	[USER_TABLE + 2*userSlot] = username;
+	[USER_TABLE + 2*userSlot + 1] = password;
+	
+	returnValue = 0;
+	goto return_to_user;
+endif;
+
+
+if(systemCallNum == INT_REMUSR) then
+	if([SYSTEM_STATUS_TABLE] != ROOT || [SYSTEM_STATUS_TABLE + 1] != SHELL_PROCESS) then
+		returnValue = -2;
+		goto return_to_user;
+	endif;
+
+	alias username R2;
+	username = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+	if(username == "root" || username == "kernel") then
+		returnValue = -2;
+		goto return_to_user;
+	endif;
+
+	alias userId R3;
+	userId = 0;
+	while(userId < MAX_USER_NUM) do
+		if([USER_TABLE + 2*userId] == username) then
+			break;
+		endif;
+		userId = userId + 1;
+	endwhile;
+
+	if(userId == MAX_USER_NUM) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	//if the user to delete has any saved files, then return
+	alias fileIndex R4;
+	fileIndex = 0;
+	while(fileIndex < MAX_FILE_NUM) do
+		if([ROOT_FILE + 8*fileIndex] != -1 && [ROOT_FILE + 8*fileIndex + 3] == username) then
+			returnValue = -3;
+			goto return_to_user;
+		endif;
+		fileIndex = fileIndex + 1;
+	endwhile;
+
+	//invalidate entry
+	[USER_TABLE + 2*userId] = -1;
+	[USER_TABLE + 2*userId + 1] = -1;
+
+	returnValue = 0;
+	goto return_to_user;
+endif;
+
+
+if(systemCallNum == INT_SETPWD) then
+	if([SYSTEM_STATUS_TABLE + 1] != SHELL_PROCESS) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	alias username R2;
+	username = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+	alias password R3;
+	password = [([PTBR + 2 * ((userSP-3)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-3) % PAGE_SIZE)];
+
+	alias userId R4;
+	userId = 0;
+	while(userId < MAX_USER_NUM) do
+		if([USER_TABLE + 2*userId] == username) then
+			break;
+		endif;
+		userId = userId + 1;
+	endwhile;
+
+	if(userId == MAX_USER_NUM) then
+		returnValue = -2;
+		goto return_to_user;
+	endif;
+
+	if(userId != [PROCESS_TABLE + SHELL_PROCESS*16 + 3] && [SYSTEM_STATUS_TABLE] != ROOT) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	encrypt password;
+
+	[USER_TABLE + 2*userId + 1] = password;
+
+	returnValue = 0;
+	goto return_to_user;
+endif;
+
+
+if(systemCallNum == INT_GETUID) then
+	alias username R2;
+	username = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+	alias userId R4;
+	userId = 0;
+	while(userId < MAX_USER_NUM) do
+		if([USER_TABLE + 2*userId] == username) then
+			returnValue = userId;
+			goto return_to_user;
+		endif;
+		userId = userId + 1;
+	endwhile;
+
+	returnValue = -1;
+	goto return_to_user;
+endif;
+
+
+if(systemCallNum == INT_GETUNAME) then
+	alias userId R2;
+	userId = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+	if(userId < 0 || userId > 15) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	//will return -1 if the entry is invalid
+	returnValue = [USER_TABLE + 2*userId];
+	goto return_to_user;
+endif;
+
+
+
+
+return_to_user:
+[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;			//reset mode flag
+SP = userSP;
+ireturn;

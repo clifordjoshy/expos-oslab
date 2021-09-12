@@ -1,0 +1,109 @@
+//read (console/file)
+
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = INT_READ;		//MODE flag
+
+alias userSP R0;
+userSP=SP;
+
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+
+// Setting SP to top of uareapage  [kernel stack]
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+
+alias fileDescriptor R1;
+fileDescriptor=[([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
+
+alias wordAddress R2;
+wordAddress = [([PTBR + 2 * ((userSP-3)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-3) % PAGE_SIZE)];		//virtual address
+wordAddress = ([PTBR + 2 * (wordAddress/PAGE_SIZE)] * PAGE_SIZE) + (wordAddress % PAGE_SIZE);		//physical address
+
+alias returnValue R11;
+
+if(fileDescriptor == -1) then
+	multipush(R0, R1, R2);
+	R3 = wordAddress;
+	R1 = TERMINAL_READ;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	call DEVICE_MANAGER;
+	multipop(R0, R1, R2);
+
+	returnValue = 0;
+	goto return_to_user;
+
+else
+	alias resTable R3;
+	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
+	
+	if(fileDescriptor < 0 || fileDescriptor > 7 || [resTable + 2*fileDescriptor] != FILE) then
+		returnValue = -1;
+		goto return_to_user;
+	endif;
+
+	alias openTableEntry R4;
+	openTableEntry = OPEN_FILE_TABLE + 4*[resTable + 2*fileDescriptor + 1];
+
+	alias inodeIndex R5;
+	inodeIndex = [openTableEntry];
+	
+	multipush(R0, R1, R2, R3, R4, R5);
+	R1 = ACQUIRE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = inodeIndex;
+	call RESOURCE_MANAGER;
+	returnValue = R0;
+	multipop(R0, R1, R2, R3, R4, R5);
+
+	if(returnValue == -1) then
+		goto return_to_user;
+	endif;
+
+	alias lSeek R6;
+	lSeek = [openTableEntry + 2];
+
+	if(inodeIndex == INODE_ROOT) then
+		//480 is the size of the root file
+		if(lSeek == 480) then
+			returnValue = -2;
+			goto release_inode_return;
+		endif;
+
+		//write root file to translated address
+		[wordAddress] = [ROOT_FILE + lSeek];
+
+	else
+		//if lSeek has reached the file size 
+		if(lSeek == [INODE_TABLE + 16*inodeIndex + 2]) then
+			returnValue = -2;
+			goto release_inode_return;
+		endif;
+
+		multipush(R0, R1, R2, R3, R4, R5, R6);
+		R4 = wordAddress;
+		R1 = BUFFERED_READ;
+		R2 = [INODE_TABLE + 16*inodeIndex + 8 + lSeek/PAGE_SIZE];			//block number
+		R3 = lSeek%PAGE_SIZE;
+		call FILE_MANAGER;
+		multipop(R0, R1, R2, R3, R4, R5, R6);
+
+	endif;
+
+	//increment lseek
+	[openTableEntry + 2] = [openTableEntry + 2] + 1;
+
+	returnValue = 0;
+
+	release_inode_return:
+	multipush(R0, R11);
+	R1 = RELEASE_INODE;
+	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R3 = inodeIndex;
+	call RESOURCE_MANAGER;
+	multipop(R0, R11);
+	goto return_to_user;
+endif;
+
+return_to_user:
+[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;			//reset mode flag
+SP = userSP;
+ireturn;
