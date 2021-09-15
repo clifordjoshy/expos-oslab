@@ -13,11 +13,11 @@ done
 xfs_commands+="dump --inodeusertable\n"
 xfs_commands+="exit\n"
 
-echo -e $xfs_commands | xfsi >/dev/null 2>&1
+echo -e $xfs_commands | nexfsi >/dev/null 2>&1
 
 for filename in *.xsm; do
-	entry=$(grep -n $filename /home/expos/myexpos/xfs-interface/inodeusertable.txt | cut -f1 -d:)
-	data=$(head -$(($entry + 10)) /home/expos/myexpos/xfs-interface/inodeusertable.txt | tail +$(($entry + 7)) | tr '\n' ' ')
+	entry=$(grep -n $filename /home/nexpos/mynexpos/nexfs-interface/inodeusertable.txt | cut -f1 -d:)
+	data=$(head -$(($entry + 10)) /home/nexpos/mynexpos/nexfs-interface/inodeusertable.txt | tail +$(($entry + 7)) | tr '\n' ' ')
 	echo -e "$filename: $data"
 done
 

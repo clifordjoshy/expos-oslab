@@ -1,22 +1,22 @@
 #My aliases
-xfsi() {
+nexfsi() {
 	if [ "$1" = "--loados" ]; then
-		(cd /home/expos/myexpos/workdir/common && ./_loados.sh)
+		(cd /home/nexpos/mynexpos/workdir && ./_loados.sh)
 	elif [ "$1" = "--loadutils" ]; then
-		(cd /home/expos/myexpos/workdir/common && ./_loadutils.sh)
+		(cd /home/nexpos/mynexpos/workdir && ./_loadutils.sh)
 	else
-		(cd /home/expos/myexpos/xfs-interface && ./xfs-interface)
+		(cd /home/nexpos/mynexpos/nexfs-interface && ./xfs-interface)
 	fi
 }
 
-export -f xfsi
+export -f nexfsi
 
-xsm() {
+nexsm() {
 	bgPID=0
 	if [ "$1" = "--debug" ]; then
 		while true; do
-			if [ -f /home/expos/myexpos/xsm/mem ]; then
-				mv /home/expos/myexpos/xsm/mem .
+			if [ -f /home/nexpos/mynexpos/nexsm/mem ]; then
+				mv /home/nexpos/mynexpos/nexsm/mem .
 				sleep 1.5
 			fi
 			sleep 0.1
@@ -25,7 +25,7 @@ xsm() {
 		bgPID=$!
 	fi
 
-	(cd /home/expos/myexpos/xsm && ./xsm "$@")
+	(cd /home/nexpos/mynexpos/nexsm && ./xsm "$@")
 
 	if [ "$1" = "--debug" ]; then
 		kill $bgPID
@@ -33,13 +33,13 @@ xsm() {
 	fi
 }
 
-spl() {
+nespl() {
 	ABS_PATH=$(readlink -f $1)
-	(cd /home/expos/myexpos/spl && ./spl $ABS_PATH)
+	(cd /home/nexpos/mynexpos/nespl && ./spl $ABS_PATH)
 }
-export -f spl
+export -f nespl
 
-xfsif() {
+nexfsif() {
 	ABS_PATH=$(readlink -f "${@: -1}")
 	FILENAME=$(basename "${@: -1}")
 	IS_LOADING_EXEC=0
@@ -58,19 +58,19 @@ xfsif() {
 
 	XFS_COMMAND+="\nexit"
 
-	echo -e "$XFS_COMMAND" | xfsi
+	echo -e "$XFS_COMMAND" | nexfsi
 
 	if [ "$IS_LOADING_EXEC" -eq 1 ]; then
-		ENTRY_LINE=$(grep -n $FILENAME /home/expos/myexpos/xfs-interface/inodeusertable.txt | cut -f1 -d:)
+		ENTRY_LINE=$(grep -n $FILENAME /home/nexpos/mynexpos/nexfs-interface/inodeusertable.txt | cut -f1 -d:)
 		echo Loaded to disk blocks
-		echo $(head -$((ENTRY_LINE + 10)) /home/expos/myexpos/xfs-interface/inodeusertable.txt | tail +$((ENTRY_LINE + 7)))
+		echo $(head -$((ENTRY_LINE + 10)) /home/nexpos/mynexpos/nexfs-interface/inodeusertable.txt | tail +$((ENTRY_LINE + 7)))
 	fi
 
 }
-export -f xfsif
+export -f nexfsif
 
 expl() {
 	ABS_PATH=$(readlink -f $1)
-	(cd /home/expos/myexpos/expl && ./expl $ABS_PATH)
+	(cd /home/nexpos/mynexpos/expl && ./expl $ABS_PATH)
 }
 export -f expl

@@ -1,26 +1,26 @@
 //shutdown
 
 //mode flag
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = INT_SHUTDOWN;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = INT_SHUTDOWN;
 
 alias userSP R0;
 userSP = SP;
 
-[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
 
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * PAGE_SIZE - 1;
 
 //if current process is not shell or current user is not root
-if([SYSTEM_STATUS_TABLE + 1] != SHELL_PROCESS || [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 3] != ROOT) then
+if([SYSTEM_STATUS_TABLE + 5*CORE + 1] != SHELL_PROCESS || [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 3] != ROOT) then
 	[([PTBR + 2 * ((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
-	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
 	SP = userSP;
 	ireturn;
 endif;
 
 //kill all processes except login, init and idle
 R1 = KILL_ALL;
-R2 = [SYSTEM_STATUS_TABLE + 1];			//will not kill this process
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];			//will not kill this process
 call PROCESS_MANAGER;
 
 
@@ -32,7 +32,7 @@ while(bufferIndex < MAX_BUFFER) do
 		R3 = BUFFER_BASE + bufferIndex;
 		R4 = [BUFFER_TABLE + 4*bufferIndex];
 		R1 = DISK_STORE;
-		R2 = [SYSTEM_STATUS_TABLE + 1];
+		R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 		call DEVICE_MANAGER;
 		multipop(R1);
 	endif;
@@ -41,7 +41,7 @@ endwhile;
 
 
 R1 = DISK_STORE;
-R2 = [SYSTEM_STATUS_TABLE + 1];
+R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 
 //write the memory inode table + user table to disk 
 R3 = 59;

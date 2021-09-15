@@ -1,14 +1,14 @@
 //fork
 
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = INT_FORK;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = INT_FORK;
 alias userSP R0;
 userSP = SP;
 
 //set uptr for process to sp
-[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
 
 // Setting SP to top of uareapage  [kernel stack]
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * PAGE_SIZE - 1;
 
 alias pidChild R1;
 multipush(R0);
@@ -22,12 +22,12 @@ if(pidChild == -1) then
 	[([PTBR + 2 * ((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
 	SP = userSP;
 	//reset mode flag to 0
-	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
 	ireturn;
 endif;
 
 alias pidParent R2;
-pidParent = [SYSTEM_STATUS_TABLE + 1];
+pidParent = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 
 //if heap is not allocated. assign one to parent process
 if([PAGE_TABLE_BASE + 20*pidParent + 4] == -1) then

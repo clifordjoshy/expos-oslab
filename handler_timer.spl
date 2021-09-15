@@ -1,13 +1,13 @@
 //update user sp
-[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
 // Switch to kernel stack
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * 512 - 1;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * 512 - 1;
 
 backup;
 
 //paging status.(if swapping is initiated)
 if([SYSTEM_STATUS_TABLE + 5] != 0) then
-	if([SYSTEM_STATUS_TABLE + 1] == SWAPPER_DAEMON) then
+	if([SYSTEM_STATUS_TABLE + 5*CORE + 1] == SWAPPER_DAEMON) then
 		R1 = [SYSTEM_STATUS_TABLE + 5];				//call swap out or swap in
 		R2 = SWAPPER_DAEMON;
 		call PAGER_MODULE;
@@ -45,7 +45,7 @@ endif;
 
 
 //update state of current process
-[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 4] = READY;
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 4] = READY;
 
 //update ticks
 alias procId R0;
@@ -61,7 +61,7 @@ call CONTEXT_SWITCH;
 
 restore;
 
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 13];
-[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 9] = 0;				//mode flag
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13];
+[PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 9] = 0;				//mode flag
 
 ireturn;

@@ -3,19 +3,19 @@ alias systemCallNum R0;
 systemCallNum = [([PTBR + 2 * ((SP-5)/PAGE_SIZE)] * PAGE_SIZE) + ((SP-5) % PAGE_SIZE)];
 
 //mode flag
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = systemCallNum;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = systemCallNum;
 
 alias userSP R1;
 userSP = SP;
 
-[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
 
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * PAGE_SIZE - 1;
 
 alias returnValue R11;
 
 if(systemCallNum == INT_NEWUSR) then
-	if([SYSTEM_STATUS_TABLE] != ROOT || [SYSTEM_STATUS_TABLE + 1] != SHELL_PROCESS) then
+	if([SYSTEM_STATUS_TABLE] != ROOT || [SYSTEM_STATUS_TABLE + 5*CORE + 1] != SHELL_PROCESS) then
 		returnValue = -2;
 		goto return_to_user;
 	endif;
@@ -59,7 +59,7 @@ endif;
 
 
 if(systemCallNum == INT_REMUSR) then
-	if([SYSTEM_STATUS_TABLE] != ROOT || [SYSTEM_STATUS_TABLE + 1] != SHELL_PROCESS) then
+	if([SYSTEM_STATUS_TABLE] != ROOT || [SYSTEM_STATUS_TABLE + 5*CORE + 1] != SHELL_PROCESS) then
 		returnValue = -2;
 		goto return_to_user;
 	endif;
@@ -107,7 +107,7 @@ endif;
 
 
 if(systemCallNum == INT_SETPWD) then
-	if([SYSTEM_STATUS_TABLE + 1] != SHELL_PROCESS) then
+	if([SYSTEM_STATUS_TABLE + 5*CORE + 1] != SHELL_PROCESS) then
 		returnValue = -1;
 		goto return_to_user;
 	endif;
@@ -184,6 +184,6 @@ endif;
 
 return_to_user:
 [([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;			//reset mode flag
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;			//reset mode flag
 SP = userSP;
 ireturn;

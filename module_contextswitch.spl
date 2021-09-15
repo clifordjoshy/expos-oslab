@@ -1,6 +1,6 @@
 //module 5
 alias currentPID R0;
-currentPID = [SYSTEM_STATUS_TABLE + 1];
+currentPID = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 
 //The ExpL application does not push the Base Pointer register (BP)
 multipush(BP);
@@ -13,28 +13,54 @@ processTableEntry = PROCESS_TABLE + 16*currentPID;
 [processTableEntry + 15] = PTLR;
 
 
-alias scheduleProc R1;
-scheduleProc = IDLE_PROCESS;
+multipush(R0);
+R1 = ACQUIRE_SCHED_LOCK;
+call ACCESS_CONTROL;
+multipop(R0);
 
-//if paging status is not 0 [paging is ongoing]
-if([SYSTEM_STATUS_TABLE + 5] != 0) then
-	if([PROCESS_TABLE + 16*SWAPPER_DAEMON + 4] != WAIT_DISK) then		//not blocked by disk operation
-		scheduleProc = SWAPPER_DAEMON;
+alias scheduleProc R1;
+
+if(CORE == PRIMARY_CORE) then
+	scheduleProc = IDLE_PROCESS;
+	//if paging status is not 0 [paging is ongoing]
+	if([SYSTEM_STATUS_TABLE + 5] != 0) then
+		if([PROCESS_TABLE + 16*SWAPPER_DAEMON + 4] != WAIT_DISK) then		//not blocked by disk operation
+			scheduleProc = SWAPPER_DAEMON;
+			goto schedule_proc;
+		endif;
 	endif;
 
-else
+	//if logout status is 1 and secondary core is not running idle2, then schedule idle
+	if([SYSTEM_STATUS_TABLE + 7] == 1 && [SYSTEM_STATUS_TABLE + 6] != IDLE2_PROCESS) then
+		goto schedule_proc;
+	endif;
+
 	alias procId R2;
 	procId = (currentPID+1) % MAX_PROC_NUM;
 	alias procCount R3;
 	procCount = 0;
 	while (procCount < MAX_PROC_NUM) do
+		if(procId == IDLE_PROCESS) then
+			continue;
+		endif;
+		if(procId == SWAPPER_DAEMON) then
+			continue;
+		endif;
+		//only on secondary
+		if(procId == IDLE2_PROCESS) then
+			continue;
+		endif;
+		//current pid 2 [process running on second core]
+		if(procId == [SYSTEM_STATUS_TABLE + 6]) then
+			continue;
+		endif;
+		//if swapped
+		if([PROCESS_TABLE + 16*procId + 6] != 0) then
+			continue;
+		endif;
+
 		R4 = [PROCESS_TABLE + 16*procId + 4];
-		if (
-			procId != IDLE_PROCESS && 
-			procId != SWAPPER_DAEMON && 
-			[PROCESS_TABLE + 16*procId + 6] == 0 &&		//not swapped
-			(R4 == CREATED || R4 == READY)
-		) then
+		if(R4 == CREATED || R4 == READY) then
 			scheduleProc = procId;
 			break;
 		endif;
@@ -42,9 +68,49 @@ else
 		procId = (procId + 1) % MAX_PROC_NUM;
 		procCount = procCount + 1;
 	endwhile;
+
+else
+	scheduleProc = IDLE2_PROCESS;
+
+	//if paging status or logout status is set, then schedule idle2
+	if([SYSTEM_STATUS_TABLE + 5] != 0 || [SYSTEM_STATUS_TABLE + 7] == 1) then
+		goto schedule_proc;
+	endif;
+
+	//available processes are 3-14 [12 count]
+	alias procId R2;
+	//currentPID - 3 + 1
+	procId = ((currentPID - 2) % 12) + 3;
+	alias procCount R3;
+	procCount = 0;
+	while (procCount < 12) do
+		if(procId == IDLE2_PROCESS) then
+			continue;
+		endif;
+		//current pid1 [process running on first core]
+		if(procId == [SYSTEM_STATUS_TABLE + 1]) then
+			continue;
+		endif;
+		//if swapped
+		if([PROCESS_TABLE + 16*procId + 6] != 0) then
+			continue;
+		endif;
+
+		R4 = [PROCESS_TABLE + 16*procId + 4];
+		if(R4 == CREATED || R4 == READY) then
+			scheduleProc = procId;
+			break;
+		endif;
+
+		procId = ((procId- 2) % 12) + 3;
+		procCount = procCount + 1;
+	endwhile;
 endif;
 
-[SYSTEM_STATUS_TABLE + 1] = scheduleProc;
+
+schedule_proc:
+
+[SYSTEM_STATUS_TABLE + 5*CORE + 1] = scheduleProc;
 
 alias newProcessTable R2;
 newProcessTable = PROCESS_TABLE + 16*scheduleProc;
@@ -59,12 +125,19 @@ if([newProcessTable + 4] == CREATED) then
 	[newProcessTable + 4] = RUNNING;
 	[newProcessTable + 9] = 0;				//mode flag
 	SP = [newProcessTable + 13];
+	R1 = RELEASE_LOCK;
+	R2 = SCHED_LOCK;
+	call ACCESS_CONTROL;
 	ireturn;
 endif;
 
 [newProcessTable + 4] = RUNNING;
 
 SP =  [newProcessTable+11] * PAGE_SIZE + [newProcessTable+12];
+
+R1 = RELEASE_LOCK;
+R2 = SCHED_LOCK;
+call ACCESS_CONTROL;
 
 multipop(BP);
 

@@ -4,14 +4,14 @@ alias systemCallNum R0;
 systemCallNum = [([PTBR + 2 * ((SP-5)/PAGE_SIZE)] * PAGE_SIZE) + ((SP-5) % PAGE_SIZE)];
 
 //mode flag
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = systemCallNum;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = systemCallNum;
 
 alias userSP R1;
 userSP = SP;
 
-[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
 
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * PAGE_SIZE - 1;
 
 
 if(systemCallNum == INT_WAIT) then
@@ -19,19 +19,19 @@ if(systemCallNum == INT_WAIT) then
 	pidToWait = [([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
 
 	if(
-		pidToWait == [SYSTEM_STATUS_TABLE+1] || 
+		pidToWait == [SYSTEM_STATUS_TABLE + 5*CORE + 1] || 
 		[PROCESS_TABLE + 16*pidToWait + 4] == TERMINATED || 
 		pidToWait < 0 || pidToWait >= MAX_PROC_NUM
 	) then
 		
 		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
-		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
 		SP = userSP;
 		ireturn;
 	endif;
 
-	[PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 4] = WAIT_PROCESS;
-	[PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 5] = pidToWait;
+	[PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 4] = WAIT_PROCESS;
+	[PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 5] = pidToWait;
 
 	multipush(R0, R1);
 	call CONTEXT_SWITCH;
@@ -44,7 +44,7 @@ if(systemCallNum == INT_SIGNAL) then
 	alias procId R2;
 	procId = 0;
 	while (procId < MAX_PROC_NUM) do
-		if([PROCESS_TABLE + 16*procId + 4] == WAIT_PROCESS && [PROCESS_TABLE + 16*procId + 5] == [SYSTEM_STATUS_TABLE+1]) then
+		if([PROCESS_TABLE + 16*procId + 4] == WAIT_PROCESS && [PROCESS_TABLE + 16*procId + 5] == [SYSTEM_STATUS_TABLE + 5*CORE + 1]) then
 			[PROCESS_TABLE + 16*procId + 4] = READY;		
 		endif;
 		procId = procId + 1;
@@ -54,14 +54,14 @@ endif;
 
 
 if(systemCallNum == INT_GETPID) then
-	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = [SYSTEM_STATUS_TABLE+1];
+	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 endif;
 
 
 if(systemCallNum == INT_GETPPID) then
-	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 2];
+	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 2];
 endif;
 
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
 SP = userSP;
 ireturn;

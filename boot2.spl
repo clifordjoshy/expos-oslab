@@ -1,0 +1,8 @@
+//entry point in idle2 stack
+[83*PAGE_SIZE] = [69*PAGE_SIZE + 1];
+
+PTBR = PAGE_TABLE_BASE + 20*IDLE2_PROCESS;
+PTLR = 10;
+SP = 8*PAGE_SIZE;         //stack is in logical page 8
+
+ireturn;

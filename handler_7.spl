@@ -1,13 +1,13 @@
 //write (console/file)
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = INT_WRITE;		//MODE flag
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = INT_WRITE;		//MODE flag
 
 alias userSP R0;
 userSP = SP;
 
-[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 1] * 16) + 13] = SP;
+[PROCESS_TABLE + ( [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 13] = SP;
 
 // kernel stack
-SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 1] * 16) + 11] * PAGE_SIZE - 1;
+SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * PAGE_SIZE - 1;
 
 alias fileDescriptor R1;
 fileDescriptor=[([PTBR + 2 * ((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];
@@ -21,7 +21,7 @@ if(fileDescriptor == -2) then
 	multipush(R0, R1, R2);
 	R1 = TERMINAL_WRITE;
 	R3 = writeWord;	//from R2
-	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call DEVICE_MANAGER;
 	multipop(R0, R1, R2);
 
@@ -30,7 +30,7 @@ if(fileDescriptor == -2) then
 
 else
 	alias resTable R3;
-	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
+	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
 	
 	if(fileDescriptor < 0 || fileDescriptor > 7 || [resTable + 2*fileDescriptor] != FILE) then
 		returnValue = -1;
@@ -47,7 +47,7 @@ else
 	inodeEntry = INODE_TABLE + 16*inodeIndex;
 
 	alias currentUser R7;
-	currentUser = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+1] + 3];
+	currentUser = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 3];
 
 	//if current user is not root and not owner and exclusive permission is set
 	if(currentUser != ROOT && [inodeEntry + 3] != currentUser && [inodeEntry + 4] == EXCLUSIVE) then
@@ -57,7 +57,7 @@ else
 	
 	multipush(R0, R1, R2, R3, R4, R5, R6);
 	R1 = ACQUIRE_INODE;
-	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	R3 = inodeIndex;
 	call RESOURCE_MANAGER;
 	returnValue = R0;
@@ -116,7 +116,7 @@ else
 	release_inode_return:
 	multipush(R0, R11);
 	R1 = RELEASE_INODE;
-	R2 = [SYSTEM_STATUS_TABLE + 1];
+	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	R3 = inodeIndex;
 	call RESOURCE_MANAGER;
 	multipop(R0, R11);
@@ -126,6 +126,6 @@ endif;
 
 return_to_user:
 [([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 1] * 16 + 9] = 0;			//reset mode flag
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;			//reset mode flag
 SP = userSP;
 ireturn;
