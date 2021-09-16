@@ -20,6 +20,7 @@ endif;
 
 //set logout process and call context switch so that core2 schedules idle
 [SYSTEM_STATUS_TABLE + 7] = 1;
+[PROCESS_TABLE + 16*SHELL_PROCESS + 4] = READY;		//set state to ready so that this process can be rescheduled.
 call CONTEXT_SWITCH;
 
 R1 = ACQUIRE_KERN_LOCK;
