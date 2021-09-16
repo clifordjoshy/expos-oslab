@@ -71,6 +71,11 @@ if(systemCallNum == INT_REMUSR) then
 		returnValue = -2;
 		goto return_to_user;
 	endif;
+		
+	multipush(R1);
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	multipop(R1);
 
 	alias userId R3;
 	userId = 0;
@@ -83,7 +88,7 @@ if(systemCallNum == INT_REMUSR) then
 
 	if(userId == MAX_USER_NUM) then
 		returnValue = -1;
-		goto return_to_user;
+		goto release_kern_lock_return;
 	endif;
 
 	//if the user to delete has any saved files, then return
@@ -92,7 +97,7 @@ if(systemCallNum == INT_REMUSR) then
 	while(fileIndex < MAX_FILE_NUM) do
 		if([ROOT_FILE + 8*fileIndex] != -1 && [ROOT_FILE + 8*fileIndex + 3] == username) then
 			returnValue = -3;
-			goto return_to_user;
+			goto release_kern_lock_return;
 		endif;
 		fileIndex = fileIndex + 1;
 	endwhile;
@@ -102,7 +107,7 @@ if(systemCallNum == INT_REMUSR) then
 	[USER_TABLE + 2*userId + 1] = -1;
 
 	returnValue = 0;
-	goto return_to_user;
+	goto release_kern_lock_return;
 endif;
 
 
@@ -179,8 +184,12 @@ if(systemCallNum == INT_GETUNAME) then
 	goto return_to_user;
 endif;
 
-
-
+release_kern_lock_return:
+multipush(R1);
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+multipop(R1);
 
 return_to_user:
 [([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;

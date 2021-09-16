@@ -17,6 +17,11 @@ writeWord = [([PTBR + 2 * ((userSP-3)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-3) % P
 
 alias returnValue R11;
 
+multipush(R1);
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+multipop(R1);
+
 if(fileDescriptor == -2) then
 	multipush(R0, R1, R2);
 	R1 = TERMINAL_WRITE;
@@ -125,6 +130,9 @@ endif;
 
 
 return_to_user:
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
 [([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
 [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;			//reset mode flag
 SP = userSP;

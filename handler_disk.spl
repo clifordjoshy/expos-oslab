@@ -5,7 +5,14 @@ SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * 512 - 1;
 
 backup;
 
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+
 [DISK_STATUS_TABLE] = 0;
+
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
 
 alias procId R0;
 procId = 1;

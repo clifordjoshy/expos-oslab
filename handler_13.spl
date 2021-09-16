@@ -13,6 +13,8 @@ userSP = SP;
 
 SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * PAGE_SIZE - 1;
 
+alias returnValue R11;
+
 if(systemCallNum == INT_SEMGET) then
 	alias entryIndex R2;
 	entryIndex = 0;
@@ -28,32 +30,36 @@ if(systemCallNum == INT_SEMGET) then
 	endwhile;
 
 	if (entryIndex == 8) then
-		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
-		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
-		SP = userSP;
-		ireturn;
+		returnValue = -1;
+		goto return_to_user;
 	endif;
 
 	[resTable + 2*entryIndex] = SEMAPHORE;
 	
 	alias semaphoreIndex R4;
 	multipush(R0, R1, R2, R3);
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+
 	R1 = ACQUIRE_SEMAPHORE;
 	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call RESOURCE_MANAGER;
 	semaphoreIndex = R0;	
+
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
 	multipop(R0, R1, R2, R3);
 
 	if(semaphoreIndex == -1) then
-		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -2;
-		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
-		SP = userSP;
-		ireturn;
+		returnValue = -2;
+		goto return_to_user;
 	endif;
 	
 	[resTable + 2*entryIndex + 1] = semaphoreIndex;
 
-	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = semaphoreIndex;
+	returnValue = semaphoreIndex;
+	goto return_to_user;
 endif;
 
 
@@ -65,24 +71,35 @@ if(systemCallNum == INT_SEMRELEASE) then
 	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
 	
 	if(semId < 0 || semId >7 || [resTable + 2*semId] != SEMAPHORE) then
-		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
-		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
-		SP = userSP;
-		ireturn;
+		returnValue = -1;
+		goto return_to_user;
 	endif;
 
 	multipush(R0, R1, R2, R3);
+
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+
 	R3 = [resTable + 2*semId + 1];		//semId is in R2
 	R1 = RELEASE_SEMAPHORE;
 	R2 = [SYSTEM_STATUS_TABLE + 5*CORE + 1];
 	call RESOURCE_MANAGER;
+
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
+
 	multipop(R0, R1, R2, R3);
 
 	[resTable + 2*semId] = -1;
 
-	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = 0;
+	returnValue = 0;
+	goto return_to_user;
 endif;
 
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
+
+return_to_user:
+[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
 SP = userSP;
 ireturn;

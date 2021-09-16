@@ -27,8 +27,8 @@ loadi(68, 10);
 loadi(128, 512);
 
 //access control module(module 8)
-loadi(516, 132);
-loadi(517, 133);
+loadi(132, 516);
+loadi(133, 517);
 
 
 alias processTableValue R0;
@@ -248,7 +248,6 @@ endwhile;
 [SYSTEM_STATUS_TABLE + 3] = 0;							//wait mem count
 [SYSTEM_STATUS_TABLE + 4] = 0;							//swapped count
 [SYSTEM_STATUS_TABLE + 5] = 0;							//paging status
-[SYSTEM_STATUS_TABLE + 6] = IDLE2_PROCESS;	//currentpid2
 [SYSTEM_STATUS_TABLE + 7] = 0;							//logout_status
 
 [KERN_LOCK] = 0;

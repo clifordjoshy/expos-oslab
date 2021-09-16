@@ -24,6 +24,9 @@ if(EC != 0 || [PROCESS_TABLE + 16*currentPID + 13] == PTLR*PAGE_SIZE-1) then
 endif;
 
 
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+
 //exception is from a code page
 if(EPN >= 4 && EPN <= 7) then
 	multipush(R8);
@@ -50,6 +53,10 @@ if(EPN == 2 || EPN == 3) then
 	[PAGE_TABLE_BASE + 20*currentPID + 6] = R0; 
 	[PAGE_TABLE_BASE + 20*currentPID + 7] = "1110"; 
 endif;
+
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
 
 multipop(EIP);
 

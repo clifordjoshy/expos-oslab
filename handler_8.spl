@@ -10,6 +10,9 @@ userSP = SP;
 // Setting SP to top of uareapage  [kernel stack]
 SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * PAGE_SIZE - 1;
 
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+
 alias pidChild R1;
 multipush(R0);
 R1 = GET_PCB_ENTRY;
@@ -22,6 +25,9 @@ if(pidChild == -1) then
 	[([PTBR + 2 * ((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
 	SP = userSP;
 	//reset mode flag to 0
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
 	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
 	ireturn;
 endif;
@@ -62,6 +68,11 @@ multipush(R0);
 call MEMORY_MANAGER;
 memUserAreaPage = R0;
 multipop(R10, R11);
+
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+
 multipop(R0, R1, R2);
 
 

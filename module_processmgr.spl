@@ -180,12 +180,13 @@ if(functionNum == KILL_ALL) then
 	endwhile;
 
 	alias procId R3;
-	procId = 2;
-	while(procId < MAX_PROC_NUM) do
+	procId = SHELL_PROCESS;
+	while(procId < IDLE2_PROCESS) do
 		if(procId != currentPID && [PROCESS_TABLE + 16*procId + 4] != TERMINATED) then
 			multipush(R1, R2, R3);
 			R1 = EXIT_PROCESS;
 			R2 = procId;
+			call PROCESS_MANAGER;
 			multipop(R1, R2, R3);
 		endif;
 		procId = procId + 1;

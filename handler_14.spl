@@ -13,6 +13,7 @@ userSP = SP;
 
 SP = [PROCESS_TABLE + ([SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16) + 11] * PAGE_SIZE - 1;
 
+alias returnValue R11;
 
 //semId is the index of the semaphore in the per process resource table
 //semIndex is the index of the semaphore in the semaphore table
@@ -25,10 +26,8 @@ if(systemCallNum == INT_SEMLOCK) then
 	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
 	
 	if(semId < 0 || semId > 7 || [resTable + 2*semId] != SEMAPHORE) then
-		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
-		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
-		SP = userSP;
-		ireturn;
+		returnValue = -1;
+		goto return_to_user;
 	endif;
 
 	alias currentPID R4;
@@ -37,17 +36,38 @@ if(systemCallNum == INT_SEMLOCK) then
 	alias semIndex R5;
 	semIndex = [resTable + 2*semId + 1];
 
+	multipush(R0, R1, R2);
+
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+
 	while([SEMAPHORE_TABLE + 4*semIndex] != -1 && [SEMAPHORE_TABLE + 4*semIndex] != currentPID) do
+
 		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_SEMAPHORE;
 		[PROCESS_TABLE + 16*currentPID + 5] = semIndex;
-		multipush(R0, R1, R2, R3, R4, R5);
+
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+
+		multipush(R3, R4, R5);
 		call CONTEXT_SWITCH;
-		multipop(R0, R1, R2, R3, R4, R5);
+		multipop(R3, R4, R5);
+
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
 	endwhile;
 
 	[SEMAPHORE_TABLE + 4*semIndex] = currentPID;
+	
+	R1 = RELEASE_LOCK;
+	R2 = KERN_LOCK;
+	call ACCESS_CONTROL;
 
-	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = 0;
+	multipop(R0, R1, R2);
+
+	returnValue = 0;
+	goto return_to_user;
 endif;
 
 
@@ -59,44 +79,64 @@ if(systemCallNum == INT_SEMUNLOCK) then
 	resTable = [PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE + 5*CORE + 1] + 11] * PAGE_SIZE + RESOURCE_TABLE_OFFSET;
 
 	if(semId < 0 || semId > 7 || [resTable + 2*semId] != SEMAPHORE) then
-		[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
-		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
-		SP = userSP;
-		ireturn;
+		returnValue = -1;
+		goto return_to_user;
 	endif;
 
 	alias semIndex R4;
 	semIndex = [resTable + 2*semId + 1];
 
+	multipush(R1);
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	multipop(R1);
+
 	//if is locked
 	if([SEMAPHORE_TABLE + 4*semIndex] != -1) then
-
+		
 		//not current process
 		if([SEMAPHORE_TABLE + 4*semIndex] != [SYSTEM_STATUS_TABLE + 5*CORE + 1]) then
-			[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -2;
-			[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
-			SP = userSP;
-			ireturn;
+			returnValue = -2;
+			goto release_kern_lock_return;
 		endif;
-
+		
 		[SEMAPHORE_TABLE + 4*semIndex] = -1;
 
+		multipush(R1, R2);
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+		multipop(R1, R2);
+		
 		alias procId R5;
 		procId = 0;
 		while (procId < MAX_PROC_NUM) do
 			if([PROCESS_TABLE + 16*procId + 4] == WAIT_SEMAPHORE && [PROCESS_TABLE + 16*procId + 5] == semIndex) then
 				[PROCESS_TABLE + 16*procId + 4] = READY;
 			endif;
-
+			
 			procId = procId + 1;
 		endwhile;
-
+		
+	else
+		returnValue = 0;
+		goto release_kern_lock_return;
 	endif;
-
-	[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = 0;
+	
+	returnValue = 0;
+	goto return_to_user;
 endif;
 
+release_kern_lock_return:
+multipush(R1);
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+multipop(R1);
+		
 
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
+return_to_user:
+[([PTBR + 2*((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
 SP = userSP;
 ireturn;

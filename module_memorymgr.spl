@@ -8,7 +8,14 @@ if(functionNum == GET_FREE_PAGE) then
 	while([SYSTEM_STATUS_TABLE+2] == 0) do		//MEM_FREE_COUNT
 		[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 4] = WAIT_MEM;
 		multipush(R1);
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+
 		call CONTEXT_SWITCH;
+
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
 		multipop(R1);
 	endwhile;
 

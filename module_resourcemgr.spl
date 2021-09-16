@@ -6,7 +6,14 @@ if (functionNum == ACQUIRE_TERMINAL) then
 	while([TERMINAL_STATUS_TABLE] == 1) do
 		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_TERMINAL;
 		multipush(R1, R2);
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+
 		call CONTEXT_SWITCH;
+
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
 		multipop(R1, R2);
 	endwhile;
 
@@ -44,7 +51,14 @@ if(functionNum == ACQUIRE_DISK) then
 	while([DISK_STATUS_TABLE] == 1) do
 		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_DISK;
 		multipush(R1, R2);
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+
 		call CONTEXT_SWITCH;
+
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
 		multipop(R1, R2);
 	endwhile;
 
@@ -108,7 +122,14 @@ if(functionNum == ACQUIRE_INODE) then
 		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_FILE;
 		[PROCESS_TABLE + 16*currentPID + 5] = inodeIndex;
 		multipush(R1, R2, R3);
+			R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+
 		call CONTEXT_SWITCH;
+
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
 		multipop(R1, R2, R3);
 	endwhile;
 
@@ -155,7 +176,14 @@ if(functionNum == ACQUIRE_BUFFER) then
 		[PROCESS_TABLE + 16*currentPID + 4] = WAIT_BUFFER;
 		[PROCESS_TABLE + 16*currentPID + 5] = bufferIndex;
 		multipush(R1, R2, R3);
+		R1 = RELEASE_LOCK;
+		R2 = KERN_LOCK;
+		call ACCESS_CONTROL;
+
 		call CONTEXT_SWITCH;
+
+		R1 = ACQUIRE_KERN_LOCK;
+		call ACCESS_CONTROL;
 		multipop(R1, R2, R3);
 	endwhile;
 

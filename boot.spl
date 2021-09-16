@@ -115,6 +115,8 @@ PTBR = PAGE_TABLE_BASE;
 PTLR = 10;
 SP = 8*PAGE_SIZE;         //stack is in logical page 8
 
+
+[SYSTEM_STATUS_TABLE + 6] = IDLE2_PROCESS;	//currentpid2
 start;			//start idle2 process in second core [calls secondary bootstrap]
 
 ireturn;

@@ -1,5 +1,5 @@
 //logout
-[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = INT_LOGIN;		//MODE flag
+[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = INT_LOGOUT;		//MODE flag
 
 alias userSP R0;
 userSP = SP;
@@ -18,8 +18,22 @@ if([SYSTEM_STATUS_TABLE + 5*CORE + 1] != SHELL_PROCESS) then
 	ireturn;
 endif;
 
+//set logout process and call context switch so that core2 schedules idle
+[SYSTEM_STATUS_TABLE + 7] = 1;
+call CONTEXT_SWITCH;
+
+R1 = ACQUIRE_KERN_LOCK;
+call ACCESS_CONTROL;
+
 R1 = KILL_ALL;
+R2 = SHELL_PROCESS;
 call PROCESS_MANAGER;
+
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+
+[SYSTEM_STATUS_TABLE + 7] = 0;
 
 [PROCESS_TABLE + 16*SHELL_PROCESS + 4] = TERMINATED;
 
@@ -34,6 +48,6 @@ shellCodePage = [PAGE_TABLE_BASE + 20*SHELL_PROCESS + 8];
 
 [PROCESS_TABLE + 16*LOGIN_PROCESS + 4] = READY;
 
-[SYSTEM_STATUS_TABLE] = KERNEL;				//cuarrent user id is set to 0(kernel)
+[SYSTEM_STATUS_TABLE] = KERNEL;				//current user id is set to 0(kernel)
 
 call CONTEXT_SWITCH;

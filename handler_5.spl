@@ -36,6 +36,11 @@ if(systemCallNum == INT_OPEN) then
 
 	alias fileTableIndex R4;
 
+	multipush(R1);
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	multipop(R1);
+
 	multipush(R0, R1, R2, R3);
 	R2 = [([PTBR + 2*((userSP-4)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-4) % PAGE_SIZE)];		//filename
 	R1 = OPEN;
@@ -45,14 +50,14 @@ if(systemCallNum == INT_OPEN) then
 
 	if(fileTableIndex < 0) then
 		returnValue = fileTableIndex;
-		goto return_to_user;
+		goto release_kern_lock_return;
 	endif;
 
 	[resTable + 2*entryIndex] = FILE;
 	[resTable + 2*entryIndex + 1] = fileTableIndex;
 
 	returnValue = entryIndex;
-	goto return_to_user;
+	goto release_kern_lock_return;
 endif;
 
 
@@ -67,6 +72,11 @@ if(systemCallNum == INT_CLOSE) then
 		returnValue = -1;
 		goto return_to_user;
 	endif;
+		
+	multipush(R1);
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	multipop(R1);
 	
 	multipush(R0, R1, R2, R3);
 	R2 = [resTable + 2*fileDescriptor + 1];
@@ -76,7 +86,7 @@ if(systemCallNum == INT_CLOSE) then
 
 	[resTable + 2*fileDescriptor] = -1;
 	returnValue = 0;
-	goto return_to_user;
+	goto release_kern_lock_return;
 endif;
 
 
@@ -94,6 +104,12 @@ if(systemCallNum == INT_SEEK)	then
 		goto return_to_user;
 	endif;
 
+	
+	multipush(R1);
+	R1 = ACQUIRE_KERN_LOCK;
+	call ACCESS_CONTROL;
+	multipop(R1);
+
 	alias openTableEntry R5;
 	openTableEntry = OPEN_FILE_TABLE + 4*[resTable + 2*fileDescriptor + 1];
 
@@ -109,7 +125,7 @@ if(systemCallNum == INT_SEEK)	then
 	multipop(R0, R1, R2, R3, R4, R5, R6);
 	
 	if(returnValue == -1) then
-		goto return_to_user;
+		goto release_kern_lock_return;
 	endif;
 
 	alias lSeek R7;
@@ -148,9 +164,16 @@ if(systemCallNum == INT_SEEK)	then
 	R3 = inodeIndex;
 	call RESOURCE_MANAGER;
 	multipop(R1, R11);
-	goto return_to_user;
+	goto release_kern_lock_return;
 endif;
 
+
+release_kern_lock_return:
+multipush(R1);
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+multipop(R1);
 
 return_to_user:
 [([PTBR + 2 * ((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = returnValue;
