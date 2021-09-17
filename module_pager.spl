@@ -15,7 +15,7 @@ if(functionNum == SWAP_OUT) then
 	alias procId R7;
 	procId = SHELL_PROCESS + 1;
 
-	while(procId < SWAPPER_DAEMON) do
+	while(procId < IDLE2_PROCESS) do
 		processTableEntry = PROCESS_TABLE + 16*procId;
 		
 		//if process is not already swapped out
@@ -119,6 +119,8 @@ if(functionNum == SWAP_OUT) then
 		pageNum = pageNum + 1;
 	endwhile;
 
+	
+	
 	//release stack pages
 	pageNum = 8;
 	while(pageNum <= 9) do
@@ -165,7 +167,7 @@ if(functionNum == SWAP_IN) then
 	maxTick = -1;
 	alias processTableEntry R6;
 	//find the swapped process in ready state having maximum tick value
-	while(procId < SWAPPER_DAEMON) do
+	while(procId < IDLE2_PROCESS) do
 		processTableEntry = PROCESS_TABLE + 16*procId;
 		if([processTableEntry + 6] == 1 && [processTableEntry + 4] == READY && [processTableEntry] > maxTick) then
 			swapProc = procId;

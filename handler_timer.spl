@@ -31,7 +31,7 @@ else
 		//if so, then set paging status to swap in
 		alias procId R0;
 		procId = SHELL_PROCESS + 1;
-		while(procId < SWAPPER_DAEMON) do
+		while(procId < IDLE2_PROCESS) do
 			if(
 				[PROCESS_TABLE + 16*procId + 6] == 1 && 
 				([PROCESS_TABLE + 16*procId] > MAX_TICK || [SYSTEM_STATUS_TABLE + 2] > MEM_HIGH)

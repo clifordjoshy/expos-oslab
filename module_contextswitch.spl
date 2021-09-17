@@ -23,8 +23,8 @@ if(CORE == PRIMARY_CORE) then
 	if([SYSTEM_STATUS_TABLE + 5] != 0) then
 		if([PROCESS_TABLE + 16*SWAPPER_DAEMON + 4] != WAIT_DISK) then		//not blocked by disk operation
 			scheduleProc = SWAPPER_DAEMON;
-			goto schedule_proc;
 		endif;
+		goto schedule_proc;
 	endif;
 
 	//if logout status is 1 and secondary core is not running idle2, then schedule idle[wait for core 2 to schedule idle2]

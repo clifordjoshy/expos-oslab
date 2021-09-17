@@ -46,7 +46,7 @@ endif;
 
 if(functionNum == EXIT_PROCESS) then
 
-		if([PROCESS_TABLE + currentPID*16 + 9] != INT_EXEC) then
+	if([PROCESS_TABLE + currentPID*16 + 9] != INT_EXEC) then
 		alias procId R3;
 		procId = 0;
 		while (procId < MAX_PROC_NUM) do
@@ -149,7 +149,7 @@ if (functionNum == GET_PCB_ENTRY) then
 	procId = SHELL_PROCESS + 1;
 	R0 = -1;
 
-	while (procId < SWAPPER_DAEMON) do
+	while (procId < IDLE2_PROCESS) do
 		if ([PROCESS_TABLE + 16*procId + 4] == TERMINATED) then
 			R0 = procId;
 			[PROCESS_TABLE + 16*procId + 1]	= procId;
