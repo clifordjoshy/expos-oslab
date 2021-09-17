@@ -109,14 +109,8 @@ R2 = [inodeTableEntry + 8];
 call MEMORY_MANAGER;
 multipop(R4, R6);
 
-multipush(R1, R2);
-R1 = RELEASE_LOCK;
-R2 = KERN_LOCK;
-call ACCESS_CONTROL;
-multipop(R1, R2);
-
 [pageTableEntry+8] = R0;
-[pageTableEntry+9] = "0110";
+[pageTableEntry+9] = "0100";
 
 //rest of the pages will be lazy loaded
 [pageTableEntry + 10] = -1;
@@ -138,11 +132,16 @@ diskMapTableEntry = DISK_MAP_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*10;
 [diskMapTableEntry + 8] = -1;
 [diskMapTableEntry + 9] = -1;
 
-
 //entry point
 [[pageTableEntry+16] * PAGE_SIZE] = [[pageTableEntry+8]*PAGE_SIZE + 1];
-SP = 8*PAGE_SIZE;
+
+multipush(R1, R2);
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+multipop(R1, R2);
 
 //reset mode flag to 0
 [PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1]*16 + 9] = 0;
+SP = 8*PAGE_SIZE;
 ireturn;

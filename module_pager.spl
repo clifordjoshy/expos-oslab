@@ -171,6 +171,7 @@ if(functionNum == SWAP_IN) then
 		processTableEntry = PROCESS_TABLE + 16*procId;
 		if([processTableEntry + 6] == 1 && [processTableEntry + 4] == READY && [processTableEntry] > maxTick) then
 			swapProc = procId;
+			maxTick = [processTableEntry];
 		endif;
 		procId = procId + 1;
 	endwhile;

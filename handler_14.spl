@@ -102,12 +102,6 @@ if(systemCallNum == INT_SEMUNLOCK) then
 		
 		[SEMAPHORE_TABLE + 4*semIndex] = -1;
 
-		multipush(R1, R2);
-		R1 = RELEASE_LOCK;
-		R2 = KERN_LOCK;
-		call ACCESS_CONTROL;
-		multipop(R1, R2);
-		
 		alias procId R5;
 		procId = 0;
 		while (procId < MAX_PROC_NUM) do
@@ -118,13 +112,10 @@ if(systemCallNum == INT_SEMUNLOCK) then
 			procId = procId + 1;
 		endwhile;
 		
-	else
-		returnValue = 0;
-		goto release_kern_lock_return;
 	endif;
 	
 	returnValue = 0;
-	goto return_to_user;
+	goto release_kern_lock_return;
 endif;
 
 release_kern_lock_return:
