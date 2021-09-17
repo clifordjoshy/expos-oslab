@@ -31,9 +31,9 @@ endwhile;
 //file not found
 if (inodeTableIndex == MAX_FILE_NUM) then
 	[([PTBR + 2 * ((userSP-1)/PAGE_SIZE)] * PAGE_SIZE) + ((userSP-1) % PAGE_SIZE)] = -1;
-	SP = userSP;
 	//reset mode flag to 0
 	[PROCESS_TABLE + [SYSTEM_STATUS_TABLE + 5*CORE + 1] * 16 + 9] = 0;
+	SP = userSP;
 	ireturn;
 endif;
 
