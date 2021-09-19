@@ -22,14 +22,17 @@ endif;
 //let the second core finish any critical operations
 R1 = ACQUIRE_KERN_LOCK;
 call ACCESS_CONTROL;
-R1 = RELEASE_LOCK;
-R2 = KERN_LOCK;
+R1 = ACQUIRE_SCHED_LOCK;
 call ACCESS_CONTROL;
 
 //disable the second core
 reset;
 
-[SCHED_LOCK] = 0;
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
+R2 = SCHED_LOCK;
+call ACCESS_CONTROL;
 
 //kill all processes except login, init and idle
 R1 = KILL_ALL;
