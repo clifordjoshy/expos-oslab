@@ -1,0 +1,304 @@
+//module 7
+//(optimised to fit into two blocks)
+
+//library Code
+loadi(63, 13);
+loadi(64, 14);
+
+//disk free list
+loadi(61, 2);
+
+//inode table + user table
+loadi(59, 3);
+loadi(60, 4);
+
+//root file
+loadi(62, 5);
+
+//init(login) program
+loadi(65, 7);
+
+//shell program
+loadi(67, 9);
+loadi(68, 10);
+
+//nexsm additions
+//secondary bootstrap loader
+loadi(128, 512);
+
+//access control module(module 8)
+loadi(132, 516);
+loadi(133, 517);
+
+
+alias processTableValue R0;
+alias pageTableValue R1;
+
+//setup init(login) process
+processTableValue = PROCESS_TABLE + 16;
+pageTableValue = PAGE_TABLE_BASE + 20;
+
+[processTableValue + 0] = 0;
+[processTableValue + 1] = LOGIN_PROCESS;
+[processTableValue + 3] = ROOT;
+[processTableValue + 4] = CREATED;
+[processTableValue + 11] = 77;
+[processTableValue + 12] = 0;
+[processTableValue + 13] = 8*PAGE_SIZE;
+[processTableValue + 14] = pageTableValue;
+[processTableValue + 15] = 10;
+
+//Library
+[pageTableValue] = 63;
+[pageTableValue + 1] = "0100";
+inline "ADD R1, 2";
+[pageTableValue] = 64;
+[pageTableValue + 1] = "0100";
+inline "ADD R1, 2";
+//Heap
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+//Code
+[pageTableValue] = 65;
+[pageTableValue+ 1] = "0100";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+//Stack
+[pageTableValue] = 66;
+[pageTableValue+ 1] = "0110";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+//entry point
+[66*PAGE_SIZE] = [65*PAGE_SIZE + 1];
+
+//per process resource table
+alias procResTableInd R2;
+procResTableInd = 0;
+while(procResTableInd < 8) do
+	[(77*PAGE_SIZE) + RESOURCE_TABLE_OFFSET + (procResTableInd*2)] = -1;
+	procResTableInd = procResTableInd + 1;
+endwhile;
+
+
+//setup shell process
+processTableValue = PROCESS_TABLE + 16*SHELL_PROCESS;
+pageTableValue = PAGE_TABLE_BASE + 20*SHELL_PROCESS;
+
+[processTableValue + 0] = 0;
+[processTableValue + 1] = SHELL_PROCESS;
+[processTableValue + 2] = LOGIN_PROCESS;		//ppid
+[processTableValue + 3] = ROOT;
+[processTableValue + 4] = TERMINATED;		//will be 'created' after login
+[processTableValue + 11] = 80;
+[processTableValue + 12] = 0;
+[processTableValue + 13] = 8*PAGE_SIZE;
+[processTableValue + 14] = pageTableValue;
+[processTableValue + 15] = 10;
+
+//Library
+[pageTableValue] = 63;
+[pageTableValue + 1] = "0100";
+inline "ADD R1, 2";
+[pageTableValue] = 64;
+[pageTableValue + 1] = "0100";
+inline "ADD R1, 2";
+//Heap
+[pageTableValue] = -1;
+[pageTableValue + 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue + 1] = "0000";
+inline "ADD R1, 2";
+//Code
+[pageTableValue] = 67;
+[pageTableValue + 1] = "0100";
+inline "ADD R1, 2";
+[pageTableValue] = 68;
+[pageTableValue + 1] = "0100";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue + 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue + 1] = "0000";
+inline "ADD R1, 2";
+//Stack
+[pageTableValue] = 78;
+[pageTableValue + 1] = "0110";
+inline "ADD R1, 2";
+[pageTableValue] = 79;
+[pageTableValue + 1] = "0110";
+inline "ADD R1, 2";
+//entry point
+[78*PAGE_SIZE] = [67*PAGE_SIZE + 1];
+
+//per process disk map table
+alias diskMapTableEntry R2;
+diskMapTableEntry = DISK_MAP_TABLE + 10*SHELL_PROCESS;
+[diskMapTableEntry + 2] = -1;
+[diskMapTableEntry + 3] = -1;
+[diskMapTableEntry + 4] = 9;		//code block 1
+[diskMapTableEntry + 5] = 10;		//code block 2
+[diskMapTableEntry + 6] = -1;
+[diskMapTableEntry + 7] = -1;
+[diskMapTableEntry + 8] = -1;
+[diskMapTableEntry + 9] = -1;
+
+//per process resource table
+alias procResTableInd R2;
+procResTableInd = 0;
+while(procResTableInd < 8) do
+	[(80*PAGE_SIZE) + RESOURCE_TABLE_OFFSET + (procResTableInd*2)] = -1;
+	inline "ADD R2, 1";
+endwhile;
+
+//setup idle2 process
+processTableValue = PROCESS_TABLE + 16*IDLE2_PROCESS;
+pageTableValue = PAGE_TABLE_BASE + 20*IDLE2_PROCESS;
+
+[processTableValue + 0] = 0;
+[processTableValue + 1] = IDLE2_PROCESS;
+[processTableValue + 3] = KERNEL;
+[processTableValue + 4] = RUNNING;
+[processTableValue + 11] = 84;
+[processTableValue + 12] = 0;
+[processTableValue + 13] = 8*PAGE_SIZE;
+[processTableValue + 14] = pageTableValue;
+[processTableValue + 15] = 10;
+
+//Library
+[pageTableValue] = -1;
+[pageTableValue + 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue + 1] = "0000";
+inline "ADD R1, 2";
+//Heap
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+//Code
+[pageTableValue] = 69;
+[pageTableValue+ 1] = "0100";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+//Stack
+[pageTableValue] = 83;
+[pageTableValue+ 1] = "0110";
+inline "ADD R1, 2";
+[pageTableValue] = -1;
+[pageTableValue+ 1] = "0000";
+inline "ADD R1, 2";
+
+
+alias procId R2;
+procId = SHELL_PROCESS + 1;
+while (procId < IDLE2_PROCESS) do
+	R3 = PROCESS_TABLE + 16*procId;
+	[R3 + 0] = 0;
+	[R3 + 4] = TERMINATED;
+	inline "ADD R2, 1";
+endwhile; 
+
+
+[TERMINAL_STATUS_TABLE] = 0;
+[DISK_STATUS_TABLE] = 0;
+
+
+//Initialize the memory free list with value 1 for pages used and 0 for free pages.
+alias memPage R2;
+memPage = 0;
+//0-75 are reserved. 76-84 are used for the init, shell, swapper daemon processes.
+while(memPage <= 84) do
+	[MEMORY_FREE_LIST + memPage] = 1;
+	inline "ADD R2, 1";
+endwhile;
+while(memPage < MAX_MEM_PAGE) do
+	[MEMORY_FREE_LIST + memPage] = 0;
+	inline "ADD R2, 1";
+endwhile;
+
+
+[SYSTEM_STATUS_TABLE + 2] = 43;							//mem free count
+[SYSTEM_STATUS_TABLE + 3] = 0;							//wait mem count
+[SYSTEM_STATUS_TABLE + 4] = 0;							//swapped count
+[SYSTEM_STATUS_TABLE + 5] = 0;							//paging status
+[SYSTEM_STATUS_TABLE + 7] = 0;							//logout_status
+
+[KERN_LOCK] = 0;
+[SCHED_LOCK] = 0;
+[ACCESS_LOCK_TABLE + 3] = 0;
+[ACCESS_LOCK_TABLE + 4] = 0;
+[ACCESS_LOCK_TABLE + 5] = 0;
+[ACCESS_LOCK_TABLE + 6] = 0;
+[ACCESS_LOCK_TABLE + 7] = 0;
+
+//page tables and disk map tables need not be initalized since they'll be copied over while forking
+
+//Initialize the semaphore table
+alias semIndex R2;
+semIndex = 0;
+while(semIndex < MAX_SEM_COUNT) do
+	R3 = SEMAPHORE_TABLE + 4*semIndex;
+	[R3] = -1;			//locking pid
+	[R3 + 1] = 0;		//process count
+	inline "ADD R2, 1";
+endwhile;
+
+//Initialize file status table
+alias fileIndex R2;
+fileIndex = 0;
+while(fileIndex < MAX_FILE_NUM) do
+	R3 = FILE_STATUS_TABLE + 4*fileIndex;
+	[R3] = -1;			//locking pid
+	[R3 + 1] = -1;	//file open count
+	inline "ADD R2, 1";
+endwhile;
+
+//Initialize buffer table
+alias bufferIndex R2;
+bufferIndex = 0;
+while(bufferIndex < MAX_BUFFER) do
+	R3 = BUFFER_TABLE + 4*bufferIndex;
+	[R3] = -1;			//block number
+	[R3 + 1] = 0;		//dirty bit
+	[R3 + 2] = -1;	//locking pid
+	inline "ADD R2, 1";
+endwhile;
+
+//Initialize open file table
+alias openIndex R2;
+openIndex = 0;
+while(openIndex < MAX_OPENFILE_NUM) do
+	R3 = OPEN_FILE_TABLE + 4*openIndex;
+	[R3] = -1;				//inode index
+	[R3 + 1] = 0;		//open instance count
+	inline "ADD R2, 1";
+endwhile;
+
+return;

@@ -1,0 +1,77 @@
+//module 8
+
+//unused bits from access lock table
+define TURN_KERN_LOCK 29576;
+define FLAGS_KERN_LOCK 29579;
+
+define TURN_SCHED_LOCK 29577;
+define FLAGS_SCHED_LOCK 29581;
+
+alias functionNum R1;
+
+if(functionNum == ACQUIRE_KERN_LOCK) then
+	if(CORE == SECONDARY_CORE) then
+		//if paging status or logout status is on
+		if([SYSTEM_STATUS_TABLE + 5] == 1 || [SYSTEM_STATUS_TABLE + 7] == 1) then
+
+			//set secondary core process to ready
+			[PROCESS_TABLE + 16*[SYSTEM_STATUS_TABLE+6] + 4] = READY;
+			multipush(R1);
+			call CONTEXT_SWITCH;
+			multipop(R1);
+		endif;
+	endif;
+
+	multipush(R0);
+	alias otherCore R0;
+	if(CORE == PRIMARY_CORE) then
+		otherCore = SECONDARY_CORE;
+	else
+		otherCore = PRIMARY_CORE;
+	endif;
+
+	[FLAGS_KERN_LOCK + CORE] = 1;
+	[TURN_KERN_LOCK] = otherCore;
+
+	while([FLAGS_KERN_LOCK + otherCore] == 1 && [TURN_KERN_LOCK] == otherCore) do
+		continue;
+	endwhile;
+
+	multipop(R0);
+	return;
+endif;
+
+
+if(functionNum == ACQUIRE_SCHED_LOCK) then
+
+	multipush(R0);
+	alias otherCore R0;
+	if(CORE == PRIMARY_CORE) then
+		otherCore = SECONDARY_CORE;
+	else
+		otherCore = PRIMARY_CORE;
+	endif;
+
+	[FLAGS_SCHED_LOCK + CORE] = 1;
+	[TURN_SCHED_LOCK] = otherCore;
+
+	while([FLAGS_SCHED_LOCK + otherCore] == 1 && [TURN_SCHED_LOCK] == otherCore) do
+		continue;
+	endwhile;
+
+	multipop(R0);
+	return;
+endif;
+
+
+if(functionNum == RELEASE_LOCK) then
+	alias lockVarAddress R2;
+
+	if(lockVarAddress == KERN_LOCK) then
+		[FLAGS_KERN_LOCK + CORE] = 0;
+	endif;
+	if(lockVarAddress == SCHED_LOCK) then
+		[FLAGS_SCHED_LOCK + CORE] = 0;
+	endif;	
+	return;
+endif;
