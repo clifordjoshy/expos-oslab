@@ -101,6 +101,12 @@ echo load --module 7 $(readlink -f module_boot.xsm) >>_xfs_commands
 nespl module_accessctrl.spl
 echo load --module 8 $(readlink -f module_accessctrl.xsm) >>_xfs_commands
 
+# nespl assg_peterson/module_boot.spl
+# echo load --module 7 $(readlink -f assg_peterson/module_boot.xsm) >>_xfs_commands
+
+# nespl assg_peterson/module_accessctrl.spl
+# echo load --module 8 $(readlink -f assg_peterson/module_accessctrl.xsm) >>_xfs_commands
+
 nexfsif run _xfs_commands
 
 rm *.xsm
