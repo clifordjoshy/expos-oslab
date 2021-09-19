@@ -19,7 +19,7 @@ if(EC != 0 || [PROCESS_TABLE + 16*currentPID + 13] == PTLR*PAGE_SIZE-1) then
 	print "Exiting Proc";
 	R1 = EXIT_PROCESS;
 	R2 = currentPID;
-	call RESOURCE_MANAGER;
+	call PROCESS_MANAGER;
 	call CONTEXT_SWITCH;
 endif;
 
