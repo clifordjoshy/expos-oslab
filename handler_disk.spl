@@ -10,10 +10,6 @@ call ACCESS_CONTROL;
 
 [DISK_STATUS_TABLE] = 0;
 
-R1 = RELEASE_LOCK;
-R2 = KERN_LOCK;
-call ACCESS_CONTROL;
-
 alias procId R0;
 procId = 1;
 while(procId < MAX_PROC_NUM) do
@@ -22,6 +18,10 @@ while(procId < MAX_PROC_NUM) do
 	endif;
 	procId = procId + 1;
 endwhile;
+
+R1 = RELEASE_LOCK;
+R2 = KERN_LOCK;
+call ACCESS_CONTROL;
 
 restore;
 
