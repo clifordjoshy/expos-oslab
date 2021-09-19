@@ -18,7 +18,7 @@ echo load --init $(readlink -f program_login.xsm) >>_xfs_commands
 expl program_shell.expl
 echo load --shell $(readlink -f program_shell.xsm) >>_xfs_commands
 
-echo load --library /home/nexpos/mynexpos/expl/library.lib >>_xfs_commands
+echo load --library $HOME/mynexpos/expl/library.lib >>_xfs_commands
 
 nespl handler_exception.spl
 echo load --exhandler $(readlink -f handler_exception.xsm) >>_xfs_commands

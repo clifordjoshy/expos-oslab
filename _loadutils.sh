@@ -16,8 +16,8 @@ xfs_commands+="exit\n"
 echo -e $xfs_commands | nexfsi >/dev/null 2>&1
 
 for filename in *.xsm; do
-	entry=$(grep -n $filename /home/nexpos/mynexpos/nexfs-interface/inodeusertable.txt | cut -f1 -d:)
-	data=$(head -$(($entry + 10)) /home/nexpos/mynexpos/nexfs-interface/inodeusertable.txt | tail +$(($entry + 7)) | tr '\n' ' ')
+	entry=$(grep -n $filename $HOME/mynexpos/nexfs-interface/inodeusertable.txt | cut -f1 -d:)
+	data=$(head -$(($entry + 10)) $HOME/mynexpos/nexfs-interface/inodeusertable.txt | tail +$(($entry + 7)) | tr '\n' ' ')
 	echo -e "$filename: $data"
 done
 
