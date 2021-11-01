@@ -1,11 +1,11 @@
 #My aliases
 xfsi() {
 	if [ "$1" = "--loados" ]; then
-		(cd /home/expos/myexpos/workdir/common && ./_loados.sh)
+		(cd $HOME/myexpos/workdir && ./_loados.sh)
 	elif [ "$1" = "--loadutils" ]; then
-		(cd /home/expos/myexpos/workdir/common && ./_loadutils.sh)
+		(cd $HOME/myexpos/workdir && ./_loadutils.sh)
 	else
-		(cd /home/expos/myexpos/xfs-interface && ./xfs-interface)
+		(cd $HOME/myexpos/xfs-interface && ./xfs-interface)
 	fi
 }
 
@@ -15,8 +15,8 @@ xsm() {
 	bgPID=0
 	if [ "$1" = "--debug" ]; then
 		while true; do
-			if [ -f /home/expos/myexpos/xsm/mem ]; then
-				mv /home/expos/myexpos/xsm/mem .
+			if [ -f $HOME/myexpos/xsm/mem ]; then
+				mv $HOME/myexpos/xsm/mem .
 				sleep 1.5
 			fi
 			sleep 0.1
@@ -25,7 +25,7 @@ xsm() {
 		bgPID=$!
 	fi
 
-	(cd /home/expos/myexpos/xsm && ./xsm "$@")
+	(cd $HOME/myexpos/xsm && ./xsm "$@")
 
 	if [ "$1" = "--debug" ]; then
 		kill $bgPID
@@ -35,7 +35,7 @@ xsm() {
 
 spl() {
 	ABS_PATH=$(readlink -f $1)
-	(cd /home/expos/myexpos/spl && ./spl $ABS_PATH)
+	(cd $HOME/myexpos/spl && ./spl $ABS_PATH)
 }
 export -f spl
 
@@ -61,9 +61,9 @@ xfsif() {
 	echo -e "$XFS_COMMAND" | xfsi
 
 	if [ "$IS_LOADING_EXEC" -eq 1 ]; then
-		ENTRY_LINE=$(grep -n $FILENAME /home/expos/myexpos/xfs-interface/inodeusertable.txt | cut -f1 -d:)
+		ENTRY_LINE=$(grep -n $FILENAME $HOME/myexpos/xfs-interface/inodeusertable.txt | cut -f1 -d:)
 		echo Loaded to disk blocks
-		echo $(head -$((ENTRY_LINE + 10)) /home/expos/myexpos/xfs-interface/inodeusertable.txt | tail +$((ENTRY_LINE + 7)))
+		echo $(head -$((ENTRY_LINE + 10)) $HOME/myexpos/xfs-interface/inodeusertable.txt | tail +$((ENTRY_LINE + 7)))
 	fi
 
 }
@@ -71,6 +71,6 @@ export -f xfsif
 
 expl() {
 	ABS_PATH=$(readlink -f $1)
-	(cd /home/expos/myexpos/expl && ./expl $ABS_PATH)
+	(cd $HOME/myexpos/expl && ./expl $ABS_PATH)
 }
 export -f expl
